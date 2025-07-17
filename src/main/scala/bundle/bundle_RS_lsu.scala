@@ -7,6 +7,7 @@ import config.OoOParams._
 
 class LsuIssueEntry extends Bundle {
   val robIdx = UInt(ROB_IDX_WIDTH.W)
+  val pc = UInt(ADDR_WIDTH.W)
 
   val isLoad = Bool()
   val isStore = Bool()
