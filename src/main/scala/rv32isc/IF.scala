@@ -38,6 +38,7 @@ class IFStage extends Module {
   for (i <- 0 until FETCH_WIDTH) {
     IFBundleVec(i).pc         := pcReg.io.out.pcVec(i)
     IFBundleVec(i).inst       := instVec(i)
+    IFBundleVec(i).isJump := predictor.io.out.redirect.valid
   }
 
   // === IF/ID Reg 连接 ===

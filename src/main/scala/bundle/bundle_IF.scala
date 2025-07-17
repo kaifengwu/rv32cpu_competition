@@ -45,6 +45,7 @@ class IFStageIO extends Bundle {
 class IFBundle extends Bundle {
   val pc         = UInt(ADDR_WIDTH.W)
   val inst       = UInt(INST_WIDTH.W)
+  val isJump   = Bool() // 是否跳转
 }
 
 class PredictorUpdateBundle extends Bundle {

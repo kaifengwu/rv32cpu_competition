@@ -164,11 +164,12 @@ object OoOParams {
   val ALU_UNITS = 2
   val BR_UNITS  = 1
   val LSU_UNITS = 1
+  val MOV_UNITS = 1
 
   val FREELIST_SIZE = PHYS_REG_NUM - Configs.REG_NUMS
   val ARCH_REG_NUM = Configs.REG_NUMS
   val ARCH_REG_IDX_WIDTH = Configs.REG_NUMS_LOG
-  val NUM_BYPASS_PORTS = ALU_UNITS + BR_UNITS + LSU_UNITS
+  val NUM_BYPASS_PORTS = ALU_UNITS + BR_UNITS + LSU_UNITS + MOV_UNITS
 }
 
 // ------------------------------

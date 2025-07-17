@@ -21,6 +21,7 @@ class WbCtrlBundle extends Bundle {
 class BranchCtrlBundle extends Bundle {
   val isBranch = Bool()
   val isJalr   = Bool()
+  val isJal   = Bool()
   val isJump   = Bool()
 }
 
