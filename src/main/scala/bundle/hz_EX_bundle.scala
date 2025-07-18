@@ -1,26 +1,36 @@
 package bundles
-import chisel3._
-import config.Configs._
-import config.InstructionConstants._
 
-//BU相关端口定义
-class BU_OUT extends Bundle {
-  val cmp        = Bool()             // 跳转条件是否成立
-  val result     = UInt(DATA_WIDTH.W) // 跳转目标地址
-  val outValid   = Bool()             // 输出数据有效
-  val isJump     = Bool()             // 是否为JAL/JALR
-  val isJalr     = Bool()             // 是否为JALR
-  val isBranch   = Bool()             // 是否为分支指令
-  val mispredict = Bool()             // 预测是否错误
-  val busy       = Bool()             // busy信号，用于记分牌s
+import chisel3._
+import chisel3.util._
+import config.Configs._
+import config.OoOParams._
+import bundles._
+
+// BU相关端口定义
+class BU_IO extends Bundle {
+  val rs1_data = Input(UInt(DATA_WIDTH.W))
+  val rs2_data = Input(UInt(DATA_WIDTH.W))
+  val pc       = Input(UInt(ADDR_WIDTH.W))
+  val imm      = Input(UInt(DATA_WIDTH.W))
+  val aluCtrl  = Input(new AluCtrlBundle) // 修改为AluCtrlBundle
+  val predictedTaken = Input(Bool())
+  val robIdx   = Input(UInt(ROB_IDX_WIDTH.W))
+  val isReturn = Input(Bool()) // 是否是返回指令
 }
 
-class BU_IO extends Bundle {
-  val in      = Input(new ALU_IN)         // 组合逻辑输入
-  val predictedTaken  = Input(Bool())     // 分支预测
-  val out     = Output(new BU_OUT)
-  val ready = Input(Bool())             // 下游ready（Decoupled协议）
-  val busy    = Output(Bool())            // busy信号
+class BU_OUT extends Bundle {
+  val cmp        = Bool() 
+  val result     = UInt(ADDR_WIDTH.W) //result存的是jal/jalr的是pc+imm
+  val branch_actual_target = UInt(ADDR_WIDTH.W) // 分支跳转的实际目标地址
+  val outValid   = Bool()
+  val isBranch   = Bool()
+  val mispredict = Bool()
+  val busy       = Bool()
+  val branch_pc  = UInt(ADDR_WIDTH.W)
+  val jal_pc     = UInt(ADDR_WIDTH.W)
+  val jal_pc4    = UInt(ADDR_WIDTH.W)
+  val robIdx     = UInt(ROB_IDX_WIDTH.W) //ROB索引，传递给ROB，本阶段只是传递信号不做任何处理
+  val isReturnOut   = Bool() // 是否是返回指令
 }
 
 //ALU相关端口定义
@@ -34,12 +44,13 @@ class ALU_OUT extends Bundle {
  }
 
 class  ALU_IN extends Bundle {
-  val rs1_data   = UInt(DATA_WIDTH.W)  // 第一个操作数（rs1）
-  val rs2_data   = UInt(DATA_WIDTH.W)  // 第二个操作数（rs2）
-  val imm    = UInt(DATA_WIDTH.W)  // 立即数
-  val valid  = Bool()              // 当前输入是否有效（flush/nop处理用）
-  val pc = UInt(ADDR_WIDTH.W) // 程序计数器
-  val alu_ctrl = new ControlUnitAlu // ALU控制信号
+  val rs1_data   = UInt(DATA_WIDTH.W)  // 源操作数1数据
+  val rs2_data   = UInt(DATA_WIDTH.W)  // 源操作数2数据
+  val imm        = UInt(DATA_WIDTH.W)  // 立即数
+  val valid      = Bool()              // 输入是否有效
+  val pc         = UInt(ADDR_WIDTH.W)  // 程序计数器
+  val alu_ctrl   = new AluCtrlBundle   // ALU控制信号
+  val robIdx     = UInt(ROB_IDX_WIDTH.W) // 乱序相关（可选，便于写回）
 }
 
 class ALUIO extends Bundle {
