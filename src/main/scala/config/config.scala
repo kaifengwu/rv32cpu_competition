@@ -157,9 +157,9 @@ object OoOParams {
   val ROB_SIZE = 32 
   val ROB_IDX_WIDTH = ceil(log(ROB_SIZE) / log(2)).toInt
 
-  val RS_ALU_SIZE = 8
-  val RS_BR_SIZE  = 4
-  val RS_LS_SIZE  = 4
+  val RS_ALU_SIZE = 16 
+  val RS_BR_SIZE  = 8 
+  val RS_LS_SIZE  = 8
 
   val ALU_UNITS = 2
   val BR_UNITS  = 1
@@ -170,6 +170,12 @@ object OoOParams {
   val ARCH_REG_NUM = Configs.REG_NUMS
   val ARCH_REG_IDX_WIDTH = Configs.REG_NUMS_LOG
   val NUM_BYPASS_PORTS = ALU_UNITS + BR_UNITS + LSU_UNITS + MOV_UNITS
+
+
+  //RAS参数
+  val RAS_DEPTH = 32
+  val MAX_RAS_CHECKPOINTS = 16
+
 }
 
 // ------------------------------
