@@ -10,19 +10,10 @@ class FreeList extends Module {
   val io = IO(new FreeListIO)
 
   // === 空闲物理寄存器池：初始化为 p32 ~ p127 ===
-  val freeList = Reg(Vec(FREELIST_SIZE, UInt(PHYS_REG_IDX_WIDTH.W)))
+  val freeList = RegInit(VecInit((ARCH_REG_NUM until PHYS_REG_NUM).map(_.U(PHYS_REG_IDX_WIDTH.W))))
   val headPtr  = RegInit(0.U(log2Ceil(FREELIST_SIZE).W))              // 分配指针
   val tailPtr  = RegInit(FREELIST_SIZE.U(log2Ceil(FREELIST_SIZE).W)) // 回收指针
   val count    = RegInit(FREELIST_SIZE.U(log2Ceil(FREELIST_SIZE + 1).W))
-
-  // 初始化：仅在 reset 时加载初始值（一次性）
-  val initDone = RegInit(false.B)
-  when(!initDone) {
-    for (i <- 0 until FREELIST_SIZE) {
-      freeList(i) := (ARCH_REG_NUM + i).U
-    }
-    initDone := true.B
-  }
 
   // === 分配逻辑 ===
   val allocCount = Wire(Vec(ISSUE_WIDTH, UInt(log2Ceil(FREELIST_SIZE + 1).W)))
