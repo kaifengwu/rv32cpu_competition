@@ -8,6 +8,7 @@ import config.OoOParams._
 import bundles._
 
 class RAT extends Module {
+
   val io = IO(new RATIO)
   val SNAP_DEPTH = 16
 

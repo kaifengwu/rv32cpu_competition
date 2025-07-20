@@ -147,12 +147,14 @@ object LWB_InstructionConstants {
 // ------------------------------
 // 乱序执行参数
 // ------------------------------
+
 object OoOParams {
   val ISSUE_WIDTH  = 2
-  val MAX_COMMIT_WIDTH = MAX_COMMIT_BR + MAX_COMMIT_ALU + MAX_COMMIT_STORE
-  val MAX_COMMIT_ALU = 2
+  val MAX_COMMIT_WB = 2
   val MAX_COMMIT_BR = 1
   val MAX_COMMIT_STORE = 1
+  val MAX_COMMIT_WIDTH = MAX_COMMIT_BR + MAX_COMMIT_WB + MAX_COMMIT_STORE
+
 
   val PHYS_REG_NUM = 128 
   val PHYS_REG_IDX_WIDTH = ceil(log(PHYS_REG_NUM) / log(2)).toInt
@@ -172,7 +174,7 @@ object OoOParams {
   val FREELIST_SIZE = PHYS_REG_NUM - Configs.REG_NUMS
   val ARCH_REG_NUM = Configs.REG_NUMS
   val ARCH_REG_IDX_WIDTH = Configs.REG_NUMS_LOG
-  val NUM_BYPASS_PORTS = ALU_UNITS + BR_UNITS + LSU_UNITS + MOV_UNITS
+  val NUM_BYPASS_PORTS = ALU_UNITS + LSU_UNITS + MOV_UNITS + BR_UNITS
   val EXEC_UNITS = ALU_UNITS + BR_UNITS + LSU_UNITS + MOV_UNITS
 
 

@@ -38,7 +38,7 @@ class FreeList extends Module {
   count   := count - totalAlloc
 
   // === 回收逻辑 ===
-  for (i <- 0 until COMMIT_WIDTH) {
+  for (i <- 0 until MAX_COMMIT_WB) {
     when(io.in.dealloc(i).valid) {
       val idx = tailPtr + i.U
       val wrappedIdx = Mux(idx >= FREELIST_SIZE.U, idx - FREELIST_SIZE.U, idx)
