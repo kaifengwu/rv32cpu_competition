@@ -35,7 +35,9 @@ class RenameStageIO extends Bundle {
   val in = new Bundle {
     val idVec = Input(Vec(ISSUE_WIDTH, new IDBundle)) // 来自 ID 阶段的解码信息
     val isRet = Input(Vec(ISSUE_WIDTH, Bool())) // 每条指令是否是 ret
-    val dealloc = Input(Vec(COMMIT_WIDTH, Flipped(ValidIO(UInt(PHYS_REG_IDX_WIDTH.W)))))
+    val dealloc = Input(
+      Vec(COMMIT_WIDTH, Flipped(ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
+    )
     val stall = Input(Bool())
     val flush = Input(Bool())
   }
@@ -46,47 +48,61 @@ class RenameStageIO extends Bundle {
   }
 }
 
+
 class RATIO extends Bundle {
   val in = new Bundle {
+    // 查表输入
     val logicRs1 = Input(Vec(ISSUE_WIDTH, UInt(ARCH_REG_IDX_WIDTH.W)))
     val logicRs2 = Input(Vec(ISSUE_WIDTH, UInt(ARCH_REG_IDX_WIDTH.W)))
 
-    val wen      = Input(Vec(ISSUE_WIDTH, Bool()))
-    val logicRd  = Input(Vec(ISSUE_WIDTH, UInt(ARCH_REG_IDX_WIDTH.W)))
-    val phyRd    = Input(Vec(ISSUE_WIDTH, UInt(PHYS_REG_IDX_WIDTH.W)))
+    // 写入映射表
+    val wen     = Input(Vec(ISSUE_WIDTH, Bool()))
+    val logicRd = Input(Vec(ISSUE_WIDTH, UInt(ARCH_REG_IDX_WIDTH.W)))
+    val phyRd   = Input(Vec(ISSUE_WIDTH, UInt(PHYS_REG_IDX_WIDTH.W)))
+
+    // 快照请求（来自 ISSUE_WIDTH 条分支）
+    val snapshot = Input(Vec(ISSUE_WIDTH, ValidIO(UInt(ADDR_WIDTH.W)))) // PC 作为快照标识
+
+    // 回滚请求（ValidIO）
+    val rollback = Input(ValidIO(UInt(ADDR_WIDTH.W))) // rollback.valid + rollback.bits
+
+    val commit = Input(ValidIO(UInt(ADDR_WIDTH.W))) // 提交成功的分支 PC
   }
 
   val out = new Bundle {
     val phyRs1    = Output(Vec(ISSUE_WIDTH, UInt(PHYS_REG_IDX_WIDTH.W)))
     val phyRs2    = Output(Vec(ISSUE_WIDTH, UInt(PHYS_REG_IDX_WIDTH.W)))
-    val oldPhyRd  = Output(Vec(ISSUE_WIDTH, UInt(PHYS_REG_IDX_WIDTH.W))) // 输出旧映射值
+    val oldPhyRd  = Output(Vec(ISSUE_WIDTH, UInt(PHYS_REG_IDX_WIDTH.W)))
+
+    val currentMapping = Output(Vec(ARCH_REG_NUM, UInt(PHYS_REG_IDX_WIDTH.W))) // 当前映射（可用于测试或调试）
   }
 }
+
+
 class FreeListIO extends Bundle {
   val in = new Bundle {
-    // 哪些指令需要申请物理寄存器
     val allocate = Input(Vec(ISSUE_WIDTH, Bool()))
-
-    // 哪些物理寄存器要被释放（ValidIO 替代 deallocValid 和 deallocReg）
-    val dealloc = Input(Vec(COMMIT_WIDTH, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
+    val dealloc  = Input(Vec(COMMIT_WIDTH, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
+    val flush    = Input(Bool()) // 分支回滚
+    val snapshotTail = Input(UInt(log2Ceil(FREELIST_SIZE).W)) // 回滚目标指针
   }
 
   val out = new Bundle {
-    // 分配结果
     val phyRd = Output(Vec(ISSUE_WIDTH, UInt(PHYS_REG_IDX_WIDTH.W)))
+    val headPtr = Output(UInt(log2Ceil(FREELIST_SIZE).W)) // 当前栈顶指针
   }
 }
 
 class RenameDispatchRegIO extends Bundle {
   val in = new Bundle {
-    val renameVec   = Input(new RenameBundle)
-    val stall       = Input(Bool())
-    val flush       = Input(Bool())
+    val renameVec = Input(new RenameBundle)
+    val stall = Input(Bool())
+    val flush = Input(Bool())
     val isRet = Bool() // ★ 添加：是否是 ret 伪指令
   }
 
   val out = new Bundle {
-    val renameVec   = Output(new RenameBundle)
+    val renameVec = Output(new RenameBundle)
     val isRet = Bool() // ★ 添加：是否是 ret 伪指令
   }
 }
