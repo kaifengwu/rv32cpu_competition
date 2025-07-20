@@ -149,7 +149,10 @@ object LWB_InstructionConstants {
 // ------------------------------
 object OoOParams {
   val ISSUE_WIDTH  = 2
-  val COMMIT_WIDTH = 2
+  val MAX_COMMIT_WIDTH = MAX_COMMIT_BR + MAX_COMMIT_ALU + MAX_COMMIT_STORE
+  val MAX_COMMIT_ALU = 2
+  val MAX_COMMIT_BR = 1
+  val MAX_COMMIT_STORE = 1
 
   val PHYS_REG_NUM = 128 
   val PHYS_REG_IDX_WIDTH = ceil(log(PHYS_REG_NUM) / log(2)).toInt
