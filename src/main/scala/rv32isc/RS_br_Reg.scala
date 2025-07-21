@@ -44,9 +44,16 @@ class RS_br_Reg extends Module {
 
   // 处理输入
   when (internal_flush) {
-    // 冲刷信号优先，清空寄存器状态
+    // 在目标区域时，冲刷信号优先，清空寄存器状态
     valid := false.B
     data := 0.U.asTypeOf(new BrIssueEntry)
+  }.elsewhen (io.rollback.valid && !inRollbackRange) {
+    // 不在目标区域但有回滚信号时，保存数据并stall一个周期
+    when (io.in.fire()) {
+      valid := true.B
+      data := io.in.bits
+    }
+    // 不清除已有数据
   }.elsewhen (!io.stall) {
     // 非阻塞状态下正常传输数据
     when (io.in.fire()) {
