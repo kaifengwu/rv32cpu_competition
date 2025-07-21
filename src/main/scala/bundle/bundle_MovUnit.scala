@@ -28,6 +28,8 @@ class MovIssueEntry extends Bundle {
   val phyRd = UInt(PHYS_REG_IDX_WIDTH.W)       // 目标物理寄存器
   val pseudoSrc = UInt(PHYS_REG_IDX_WIDTH.W)   // 伪指令来源寄存器
 
+  val funct3 = UInt(3.W)                       // 函数码，用于掩码计算
   val valid = Bool()
 }
+
 

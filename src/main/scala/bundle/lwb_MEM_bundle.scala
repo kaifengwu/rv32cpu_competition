@@ -105,9 +105,9 @@ class LSUAddressIO extends Bundle {
   val out = Output(new LSUAddressOutput)
 }
 
-// 更新：移除了isPseudoMov相关处理的LSU与StoreQueue交互的接口
+// 更新：添加伪指令处理支持的LSU接口
 class LSUWithStoreQueueIO extends Bundle {
-  // 从保留站接收指令 
+  // 从保留站接收指令
   val issue = Flipped(Decoupled(new LsuIssueEntry))
 
   // 旁路总线接口
@@ -115,7 +115,8 @@ class LSUWithStoreQueueIO extends Bundle {
   val bypassOut = Output(new BypassBus)                        // 输出地址计算结果
 
   // 结果输出接口
-  val resultOut = Decoupled(new BypassBus)                     // 最终结果输出
+  val resultOut = Decoupled(new BypassBus)                     // 最终结果输出（普通指令）
+  val pseudoOut = Decoupled(new BypassBus)                     // 伪指令结果输出（伪mov指令）
 
   // 外设直连接口
   val perip_addr = Output(UInt(32.W))

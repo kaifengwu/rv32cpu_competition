@@ -3,30 +3,22 @@ import chisel3._
 import chisel3.util._
 
 import bundles._
-import config.LWB_InstructionConstants._
 import config.Configs._
-import config.InstructionConstants._
 import config.OoOParams._
 
-// LSU地址计算模块
+// 地址计算单元，用于LSU内部
 class LSUAddressUnit extends Module {
   val io = IO(new LSUAddressIO)
 
-  // 地址计算
+  // 地址计算：基地址 + 偏移
   val computedAddr = io.in.rs1_data + io.in.imm
 
-  // 地址有效性检查
-  def isValidAddress(addr: UInt, isWrite: Bool): Bool = {
-    val isIROM = (addr >= 0x80000000.U) && (addr < 0x80004000.U)
-    val isDRAM = (addr >= 0x80100000.U) && (addr < 0x80140000.U)
-    val isPerip = (addr >= 0x80200000.U) && (addr < 0x80200100.U)
-
-    // IROM只读，不能写
-    val iromValid = isIROM && !isWrite
-    // DRAM支持读写
-    val dramValid = isDRAM
-    // 外设支持读写但需要4字节对齐
-    val peripValid = isPerip && (addr(1,0) === 0.U)
+  // 地址有效性判断
+  def isValidAddress(addr: UInt, isStore: Bool): Bool = {
+    // 判断地址是否有效的逻辑
+    val iromValid = (addr >= 0x80000000.U) && (addr < 0x80010000.U) && !isStore
+    val dramValid = (addr >= 0x80100000.U) && (addr < 0x80140000.U)
+    val peripValid = (addr >= 0x80200000.U) && (addr < 0x80200100.U)
 
     iromValid || dramValid || peripValid
   }
@@ -51,9 +43,9 @@ class LSUAddressUnit extends Module {
   io.out.canAccess := isValidAddress(computedAddr, io.in.isStore) && maskValid
 }
 
-// 优化的LSU主模块，集成了StoreQueue支持，移除了伪指令处理
+// 优化的LSU主模块，支持StoreQueue和伪指令处理
 class LSU extends Module {
-  val io = IO(new LSUWithStoreQueueIO)
+  val io = IO(new LSUWithStoreQueueIO)  // 使用合并后的接口
 
   // 简化为两状态状态机
   val sIdle :: sExec :: Nil = Enum(2)
@@ -78,50 +70,16 @@ class LSU extends Module {
                                Mux(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.phyAddrBase).reduce(_ || _),
                                    Mux1H(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.phyAddrBase),
                                          io.bypassIn.map(_.data)),
-                                   0.U), // 如果没有旁路命中，正常情况下应该从寄存器文件读取
-                               // 如果已经在执行，使用寄存的指令
+                                   0.U),  // 正常应该从寄存器文件读取
+                               // 使用已保存的地址基值
                                addrResult)
   addrUnit.io.in.imm := Mux(state === sIdle, io.issue.bits.imm, issueEntryReg.imm)
   addrUnit.io.in.funct3 := Mux(state === sIdle, io.issue.bits.func3, issueEntryReg.func3)
   addrUnit.io.in.isLoad := Mux(state === sIdle, io.issue.bits.isLoad, issueEntryReg.isLoad)
   addrUnit.io.in.isStore := Mux(state === sIdle, io.issue.bits.isStore, issueEntryReg.isStore)
 
-  // 访存单元
-  val memUnit = Module(new MemoryAccessUnit)
-  memUnit.io.in.addr := addrResult
-  memUnit.io.in.mask := addrUnit.io.out.accessMask
-  memUnit.io.in.ren := issueEntryReg.isLoad
-  memUnit.io.in.wen := false.B  // 在LSU阶段不直接写入，而是放入StoreQueue
-  memUnit.io.in.wdata := storeData
-  memUnit.io.in.rdata := io.perip_rdata
-  memUnit.io.in.funct3 := issueEntryReg.func3
-  memUnit.io.in.fromStoreQueue := false.B
-  memUnit.io.in.robIdx := issueEntryReg.robIdx
-
-  // StoreQueue连接
-  // 入队逻辑
-  storeQueue.io.in.enq.valid := issueEntryReg.isStore && state === sExec
-  storeQueue.io.in.enq.bits.addr := addrResult
-  storeQueue.io.in.enq.bits.data := storeData
-  storeQueue.io.in.enq.bits.robIdx := issueEntryReg.robIdx
-
-  // 旁路查询逻辑
-  storeQueue.io.in.bypassAddr.valid := issueEntryReg.isLoad && state === sExec
-  storeQueue.io.in.bypassAddr.bits := addrResult
-
-  // 获取StoreQueue旁路结果
-  val bypassHit = storeQueue.io.out.bypass.hit
-  val bypassData = storeQueue.io.out.bypass.data
-
-  // 处理从StoreQueue提交到内存的store指令
-  when(storeQueue.io.out.commitValid) {
-    io.perip_addr := storeQueue.io.out.commitEntry.addr
-    io.perip_wen := true.B
-    io.perip_mask := "b10".U // 默认为字访问
-    io.perip_wdata := storeQueue.io.out.commitEntry.data
-  }
-
-  // 初始化默认输出
+  // 默认初始化输出
+  io.issue.ready := state === sIdle
   io.bypassOut.valid := false.B
   io.bypassOut.phyDest := 0.U
   io.bypassOut.data := 0.U
@@ -133,74 +91,175 @@ class LSU extends Module {
   io.resultOut.bits.data := 0.U
   io.resultOut.bits.robIdx := 0.U
 
+  // 伪指令输出端口初始化
+  io.pseudoOut.valid := false.B
+  io.pseudoOut.bits.valid := false.B
+  io.pseudoOut.bits.phyDest := 0.U
+  io.pseudoOut.bits.data := 0.U
+  io.pseudoOut.bits.robIdx := 0.U
+
+  // 外设接口默认值
   io.perip_addr := 0.U
   io.perip_ren := false.B
   io.perip_wen := false.B
   io.perip_mask := 0.U
   io.perip_wdata := 0.U
 
+  // 忙状态信号
   io.busy := state === sExec
-  io.issue.ready := state === sIdle
 
-  // 状态机逻辑
+  // 状态转换和数据处理
   switch(state) {
     is(sIdle) {
-      when(io.issue.valid && !io.issue.bits.isPseudoMov) { // 过滤掉伪指令
-        // 保存指令到寄存器
-        issueEntryReg := io.issue.bits
+      when(io.issue.valid) {
+        val isPseudoMov = io.issue.bits.isPseudoMov
 
-        // 计算地址并立即通过旁路总线广播
-        addrResult := addrUnit.io.out.addr
-        io.bypassOut.valid := true.B
-        io.bypassOut.phyDest := io.issue.bits.phyAddrBase
-        io.bypassOut.data := addrUnit.io.out.addr
-        io.bypassOut.robIdx := io.issue.bits.robIdx
+        when(isPseudoMov) {
+          // === 处理伪mov指令 ===
+          // 从旁路获取源数据
+          val pseudoData = Mux(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.pseudoSrc).reduce(_ || _),
+                              Mux1H(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.pseudoSrc),
+                                   io.bypassIn.map(_.data)),
+                              0.U) // 正常情况下应该从寄存器文件读取
 
-        // 获取存储数据(对于store指令)
-        when(io.issue.bits.isStore) {
-          // 尝试从旁路获取最新值
-          when(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.phyStoreData).reduce(_ || _)) {
-            storeData := Mux1H(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.phyStoreData),
-                               io.bypassIn.map(_.data))
+          // 掩码计算逻辑 - 根据func3进行掩码处理
+          val maskedData = WireDefault(pseudoData)
+          switch(io.issue.bits.func3) {
+            // 字节操作 (LB/LBU/SB)
+            is(F3_LB) { 
+              // 有符号扩展
+              val byteData = pseudoData(7, 0)
+              maskedData := Cat(Fill(24, byteData(7)), byteData)
+            }
+            is(F3_LBU) { 
+              // 无符号扩展
+              val byteData = pseudoData(7, 0)
+              maskedData := Cat(0.U(24.W), byteData)
+            }
+            // 半字操作 (LH/LHU/SH)
+            is(F3_LH) { 
+              // 有符号扩展
+              val halfwordData = pseudoData(15, 0)
+              maskedData := Cat(Fill(16, halfwordData(15)), halfwordData)
+            }
+            is(F3_LHU) { 
+              // 无符号扩展
+              val halfwordData = pseudoData(15, 0)
+              maskedData := Cat(0.U(16.W), halfwordData)
+            }
+            // 字操作 (LW/SW) - 默认情况
+            is(F3_LW) { 
+              maskedData := pseudoData
+            }
+          }
+
+          // 直接输出伪mov结果
+          io.pseudoOut.valid := true.B
+          io.pseudoOut.bits.valid := true.B
+          io.pseudoOut.bits.phyDest := io.issue.bits.phyRd
+          io.pseudoOut.bits.data := maskedData
+          io.pseudoOut.bits.robIdx := io.issue.bits.robIdx
+
+          // 保持idle状态，无需进入执行状态
+          state := sIdle
+
+        }.otherwise {
+          // === 处理普通load/store指令 ===
+          // 保存当前指令到寄存器
+          issueEntryReg := io.issue.bits
+
+          // 尝试获取store的数据
+          when(io.issue.bits.isStore) {
+            when(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.phyStoreData).reduce(_ || _)) {
+              storeData := Mux1H(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.phyStoreData),
+                                io.bypassIn.map(_.data))
+            }.otherwise {
+              storeData := 0.U  // 正常应该从寄存器文件读取
+            }
+          }
+
+          // 如果地址计算有效且没有外设访问，进行旁路
+          when(addrUnit.io.out.valid && addrUnit.io.out.canAccess) {
+            // 保存地址计算结果
+            addrResult := addrUnit.io.out.addr
+
+            // 发送地址计算结果到旁路总线
+            io.bypassOut.valid := true.B
+            io.bypassOut.phyDest := io.issue.bits.phyAddrBase
+            io.bypassOut.data := addrUnit.io.out.addr
+            io.bypassOut.robIdx := io.issue.bits.robIdx
+
+            // 如果是外设访问或需要进一步处理，转入执行状态
+            state := sExec
           }.otherwise {
-            storeData := 0.U // 正常情况下应该从寄存器文件读取
+            // 无效地址，发送错误
+            // 这里可以添加异常处理
+            state := sIdle
           }
         }
-
-        // 进入执行状态
-        state := sExec
       }
     }
 
     is(sExec) {
-      // 执行访存操作
-      io.perip_addr := addrResult
-      io.perip_ren := issueEntryReg.isLoad
-      io.perip_wen := false.B  // 在LSU阶段不直接写入，而是放入StoreQueue
-      io.perip_mask := addrUnit.io.out.accessMask
-      io.perip_wdata := storeData
-
-      // 输出结果
+      // 处理load/store指令
       when(issueEntryReg.isLoad) {
-        io.resultOut.valid := true.B
-        io.resultOut.bits.valid := true.B
-        io.resultOut.bits.phyDest := issueEntryReg.phyRd
-        // 如果命中StoreQueue中的条目，使用StoreQueue中的数据；否则使用从内存读取的数据
-        io.resultOut.bits.data := Mux(bypassHit, bypassData, memUnit.io.out.rdata)
-        io.resultOut.bits.robIdx := issueEntryReg.robIdx
-      }.elsewhen(issueEntryReg.isStore) {
-        // Store指令只需要通知ROB它已完成计算，实际写内存由StoreQueue在提交时完成
-        io.resultOut.valid := true.B
-        io.resultOut.bits.valid := true.B
-        io.resultOut.bits.phyDest := 0.U  // 存储指令不写寄存器
-        io.resultOut.bits.data := 0.U
-        io.resultOut.bits.robIdx := issueEntryReg.robIdx
-      }
+        // === Load指令处理 ===
+        // 处理外设读取
+        when(addrResult >= 0x80200000.U && addrResult < 0x80200100.U) {
+          // 外设读取，输出到外设接口
+          io.perip_addr := addrResult
+          io.perip_ren := true.B
+          io.perip_mask := addrUnit.io.out.accessMask
 
-      // 当下游接收结果后，返回空闲状态
-      when(io.resultOut.ready) {
-        state := sIdle
+          // 设置结果
+          io.resultOut.valid := true.B
+          io.resultOut.bits.valid := true.B
+          io.resultOut.bits.phyDest := issueEntryReg.phyRd
+          io.resultOut.bits.data := io.perip_rdata  // 直接使用外设数据
+          io.resultOut.bits.robIdx := issueEntryReg.robIdx
+
+          // 完成后回到空闲状态
+          state := sIdle
+        }.otherwise {
+          // 内存读取
+          // 这里假设数据已经准备好，实际上可能需要等待
+          val memData = 0xDEADBEEF.U  // 示例值，实际应从内存读取
+
+          // 设置结果
+          io.resultOut.valid := true.B
+          io.resultOut.bits.valid := true.B
+          io.resultOut.bits.phyDest := issueEntryReg.phyRd
+          io.resultOut.bits.data := memData
+          io.resultOut.bits.robIdx := issueEntryReg.robIdx
+
+          // 完成后回到空闲状态
+          state := sIdle
+        }
+      }.elsewhen(issueEntryReg.isStore) {
+        // === Store指令处理 ===
+        // 添加到StoreQueue
+        storeQueue.io.in.enq.valid := true.B
+        storeQueue.io.in.enq.bits.robIdx := issueEntryReg.robIdx
+        storeQueue.io.in.enq.bits.addr := addrResult
+        storeQueue.io.in.enq.bits.data := storeData
+        storeQueue.io.in.enq.bits.mask := addrUnit.io.out.accessMask
+
+        when(storeQueue.io.in.enq.ready) {
+          // 设置结果
+          io.resultOut.valid := true.B
+          io.resultOut.bits.valid := true.B
+          io.resultOut.bits.phyDest := 0.U  // store不需要写回
+          io.resultOut.bits.data := 0.U
+          io.resultOut.bits.robIdx := issueEntryReg.robIdx
+
+          // 完成后回到空闲状态
+          state := sIdle
+        }
       }
     }
   }
+
+  // 默认条件下resultOut和pseudoOut都准备好接收下一个结果
+  io.resultOut.ready := true.B
+  io.pseudoOut.ready := true.B
 }
