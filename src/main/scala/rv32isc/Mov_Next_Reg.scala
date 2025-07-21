@@ -1,24 +1,35 @@
 package rv32isc
+
 import chisel3._
 import chisel3.util._
 import bundles._
 import config.Configs._
 import config.OoOParams._
 
-class BU_WB_Reg extends Module {
-  val io = IO(new Bundle {
-    val in = Flipped(ValidIO(new BU_OUT))     // BU阶段输出，使用ValidIO接口
-    val out = Output(new BU_OUT)              // WB阶段输入
-    val rob_wb = Output(ValidIO(new RobWritebackEntry))  // 连接到ROB的写回接口
-    val stall = Input(Bool())                 // 阻塞信号
-    val flush = Input(Bool())                 // 外部冲刷信号
+// MovUnit到下一级的流水寄存器接口
+class Mov_Next_RegIO extends Bundle {
+  // 从MovUnit接收结果
+  val in = Flipped(ValidIO(new BypassBus))            // MovUnit执行结果
 
-    // 回滚相关信号 - 确保同步清空
-    val rollback = Input(Valid(UInt(ROB_IDX_WIDTH.W))) // 回滚信号和回滚点
-    val tail = Input(UInt(ROB_IDX_WIDTH.W))            // ROB尾指针
-  })
+  // 输出到下一级
+  val out = Output(new BypassBus)                     // 直接输出结果
+  val rob_wb = Output(ValidIO(new RobWritebackEntry)) // 连接到ROB的写回接口
 
-  val reg = RegInit(0.U.asTypeOf(new BU_OUT))
+  // 控制信号
+  val stall = Input(Bool())                           // 阻塞信号
+  val flush = Input(Bool())                           // 外部冲刷信号
+
+  // 回滚相关信号 - 确保同步清空
+  val rollback = Input(Valid(UInt(ROB_IDX_WIDTH.W)))  // 回滚信号和回滚点
+  val tail = Input(UInt(ROB_IDX_WIDTH.W))             // ROB尾指针
+}
+
+// MovUnit到下一级的流水寄存器实现
+class Mov_Next_Reg extends Module {
+  val io = IO(new Mov_Next_RegIO)
+
+  // 寄存器状态
+  val reg = RegInit(0.U.asTypeOf(new BypassBus))
   val valid = RegInit(false.B)
 
   // 判断当前指令是否在回滚区间内 - 优化环形判断逻辑
@@ -39,7 +50,7 @@ class BU_WB_Reg extends Module {
   // 寄存器更新逻辑
   when(internal_flush) {
     valid := false.B
-    reg := 0.U.asTypeOf(new BU_OUT)
+    reg := 0.U.asTypeOf(new BypassBus)
   }.elsewhen(!io.stall) {
     valid := io.in.valid
     when(io.in.valid) {
@@ -50,7 +61,7 @@ class BU_WB_Reg extends Module {
   // 输出连接
   io.out := reg
 
-  // ROB写回接口连接
+  // ROB写回接口连接 - 使用ValidIO结构与ROB对接
   io.rob_wb.valid := valid && !internal_flush
   io.rob_wb.bits.robIdx := reg.robIdx
 }

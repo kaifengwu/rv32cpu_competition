@@ -1,0 +1,33 @@
+package bundles
+import chisel3._
+import chisel3.util._
+import config.Configs._
+import config.OoOParams._
+
+// MovUnit模块的输入输出接口
+// 移除回滚信号，由前级寄存器处理回滚
+class MovUnitIO extends Bundle {
+  // 从保留站接收指令
+  val issue = Flipped(Decoupled(new MovIssueEntry))
+
+  // 旁路总线接口
+  val bypassIn = Input(Vec(NUM_BYPASS_PORTS, new BypassBus))   // 接收前馈数据
+
+  // 结果输出接口
+  val resultOut = Decoupled(new BypassBus)                     // 最终结果输出
+
+  // 忙信号
+  val busy = Output(Bool())
+}
+
+// 伪指令发射项
+class MovIssueEntry extends Bundle {
+  val robIdx = UInt(ROB_IDX_WIDTH.W)
+  val pc = UInt(ADDR_WIDTH.W)
+
+  val phyRd = UInt(PHYS_REG_IDX_WIDTH.W)       // 目标物理寄存器
+  val pseudoSrc = UInt(PHYS_REG_IDX_WIDTH.W)   // 伪指令来源寄存器
+
+  val valid = Bool()
+}
+

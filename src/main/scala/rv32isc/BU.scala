@@ -6,79 +6,99 @@ import config.Configs._
 import config.OoOParams._
 import config.InstructionConstants._
 
-// BU模块：处理分支、jal、jalr跳转逻辑
+// BU模块：处理分支、jal、jalr跳转逻辑，支持回滚和保留站接口
 class BU extends Module {
-  val io = IO(new Bundle {
-    val rs1_data = Input(UInt(DATA_WIDTH.W))
-    val rs2_data = Input(UInt(DATA_WIDTH.W))
-    val pc       = Input(UInt(ADDR_WIDTH.W))
-    val imm      = Input(UInt(DATA_WIDTH.W))
-    val aluCtrl  = Input(new AluCtrlBundle) // 只用分支相关字段
-    val predictedTaken = Input(Bool())
-    val robIdx   = Input(UInt(ROB_IDX_WIDTH.W))
-    val out      = Output(new BU_OUT)
-    val out_ready = Input(Bool()) // 下游是否准备好接收数据
-    val busy     = Output(Bool())
-    val isReturn = Input(Bool()) // 是否是返回指令
-  })
+  val io = IO(new BUIO_Decoupled)
 
-  val src1 = io.rs1_data
-  val src2 = io.rs2_data
-  val pc   = io.pc
-  val imm  = io.imm
-  val aluOp        = io.aluCtrl.aluOp
-  val aluUnsigned  = io.aluCtrl.aluUnsigned
+  // 从BrIssueEntry提取操作数和控制信号
+  val phyRd = io.in.bits.phyRd
+  val robIdx = io.in.bits.robIdx
+  val valid = io.in.valid
 
-  val cmp        = WireDefault(false.B)
+  // 控制信号提取
+  val isBranch = io.in.bits.isBranch
+  val isJal = io.in.bits.isJal
+  val isJalr = io.in.bits.isJalr
+  val func3 = io.in.bits.func3
+
+  // 数据提取
+  val pc = io.in.bits.pc
+  val imm = io.in.bits.imm
+  val predictedTarget = io.in.bits.predictedTarget
+
+  // 从保留站获取源操作数
+  val src1 = WireDefault(0.U(DATA_WIDTH.W))
+  val src2 = WireDefault(0.U(DATA_WIDTH.W))
+
+  // 这里假设BrIssueEntry中的ready1和ready2表示寄存器已就绪
+  // 实际实现中可能需要从PRF读取或使用前递
+
+  val cmp = WireDefault(false.B)
   val jumpTarget = WireDefault(0.U(ADDR_WIDTH.W))
-  // B型指令实际跳转地址
   val branch_actual_target = Wire(UInt(ADDR_WIDTH.W))
-  val isJump     = WireDefault(false.B)
-  val isJalr     = WireDefault(false.B)
-  val isBranch   = WireDefault(false.B)
+  val isReturn = WireDefault(false.B) // 假设通过某种方式判断返回指令
   val actualTaken = WireDefault(false.B)
-  val branch_pc  = WireDefault(0.U(ADDR_WIDTH.W))
-  val jal_pc     = WireDefault(0.U(ADDR_WIDTH.W))
-  val jal_pc4    = WireDefault(0.U(ADDR_WIDTH.W))
+  val jal_pc4 = WireDefault(0.U(ADDR_WIDTH.W))
+  val predictedTaken = WireDefault(false.B) // 假设预测信息在BrIssueEntry中
 
+  // 地址预测正确性判断信号
+  val targetPredictionCorrect = WireDefault(false.B)
 
-  switch(aluOp) {
-    is(OP_EQ)  { cmp := src1 === src2; isBranch := true.B; branch_pc := pc }
-    is(OP_NEQ) { cmp := src1 =/= src2; isBranch := true.B; branch_pc := pc }
-    is(OP_LT)  { cmp := Mux(aluUnsigned, src1 < src2, src1.asSInt < src2.asSInt); isBranch := true.B; branch_pc := pc }
-    is(OP_GE)  { cmp := Mux(aluUnsigned, src1 >= src2, src1.asSInt >= src2.asSInt); isBranch := true.B; branch_pc := pc }
-    is(OP_JAL)  { cmp := true.B; isJump := true.B; jal_pc := pc; jal_pc4 := pc + 4.U }
-    is(OP_JALR) { cmp := true.B; isJump := true.B; isJalr := true.B; jal_pc := pc; jal_pc4 := pc + 4.U }
-    is(OP_NOP)  { cmp := false.B }
-  }
-
+  // 确定分支类型并执行比较
   when(isBranch) {
+    //使用func3字段，这是因为BrEntry传入的是func3而不是直接传入op类型。
+    switch(func3) {
+      is("b000".U) { cmp := src1 === src2 } // BEQ
+      is("b001".U) { cmp := src1 =/= src2 } // BNE
+      is("b100".U) { cmp := src1.asSInt < src2.asSInt } // BLT
+      is("b101".U) { cmp := src1.asSInt >= src2.asSInt } // BGE
+      is("b110".U) { cmp := src1 < src2 } // BLTU
+      is("b111".U) { cmp := src1 >= src2 } // BGEU
+    }
+
     actualTaken := cmp
     jumpTarget := pc + imm
-    branch_actual_target := Mux(actualTaken,pc + imm, pc + 4.U) // 如果跳转被预测为实际跳转，则使用pc + imm，否则使用pc + 4
-  }.elsewhen(isJump && !isJalr) {
+    branch_actual_target := Mux(actualTaken, pc + imm, pc + 4.U)
+
+    // B型指令：预测跳转地址与实际目标地址比较
+    targetPredictionCorrect := predictedTarget === branch_actual_target
+  }.elsewhen(isJal) {
     actualTaken := true.B
     jumpTarget := pc + imm
+    jal_pc4 := pc + 4.U
+
+    // J型指令：预测跳转地址与跳转目标地址比较
+    targetPredictionCorrect := predictedTarget === jumpTarget
   }.elsewhen(isJalr) {
     actualTaken := true.B
-    jumpTarget := src1 + imm
+    jumpTarget := (src1 + imm) & ~1.U // JALR地址计算规则
+    jal_pc4 := pc + 4.U
+
+    // JALR指令：预测跳转地址与跳转目标地址比较
+    targetPredictionCorrect := predictedTarget === jumpTarget
   }
 
-  val outValid = true.B // 单周期实现，每周期都能输出
+  val outValid = valid // 输出有效信号
   val busy = outValid && !io.out_ready // 有效输出但下游未采纳时为busy
-  val mispredict = actualTaken =/= io.predictedTaken
+  val mispredict = actualTaken =/= predictedTaken
 
-  io.out.cmp        := cmp
-  io.out.result     := jumpTarget
-  io.out.outValid   := outValid
-  io.out.isBranch   := isBranch
+  // 设置输出信号
+  io.out.cmp := cmp
+  io.out.result := jumpTarget
+  io.out.branch_actual_target := branch_actual_target
+  io.out.outValid := outValid
+  io.out.isBranch := isBranch
   io.out.mispredict := mispredict
-  io.out.busy       := busy
-  io.out.branch_pc  := branch_pc
-  io.out.jal_pc     := jal_pc
-  io.out.jal_pc4    := jal_pc4
-  io.out.robIdx     := io.robIdx
-  io.out.branch_actual_target := branch_actual_target // 新增输出
-  io.out.isReturnOut := io.isReturn // 传递是否是返回指令
-  io.busy := busy
+  io.out.targetPredictionCorrect := targetPredictionCorrect
+  io.out.busy := busy
+  io.out.pc := pc // 统一使用原始指令PC
+  io.out.jal_pc4 := jal_pc4
+  io.out.robIdx := robIdx
+  io.out.isReturnOut := isReturn
+
+  // 传递写回物理寄存器信息
+  io.out.phyRd := phyRd
+
+  // 处理输入就绪信号 - 当BU不忙时，可以接收新指令
+  io.in.ready := !busy
 }

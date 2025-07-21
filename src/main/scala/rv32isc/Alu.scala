@@ -1,21 +1,27 @@
+
 package rv32isc
+
 import chisel3._
 import chisel3.util._
 import bundles._
 import config.Configs._
 import config.InstructionConstants._
+import config.OoOParams._
 
-class Alu extends Module{
-  val io = IO(new ALUIO)
+class Alu extends Module {
+  val io = IO(new ALUIO_Decoupled)
 
-  val op     = io.in.alu_ctrl.aluOp
-  val src1   = Mux(io.in.alu_ctrl.alu_isAuipc,io.in.pc,Mux(io.in.alu_ctrl.alu_islui,0.U,io.in.rs1_data))
-  val src2   = Mux(io.in.alu_ctrl.aluSrc,io.in.imm,io.in.rs2_data)
-  val aluUnsigned = io.in.alu_ctrl.aluUnsigned
-  val valid  = io.in.valid
+  // 从AluIssueEntry提取操作数和控制信号
+  val op = io.in.bits.aluCtrl.aluOp
+  val src1 = Mux(io.in.bits.aluCtrl.alu_isAuipc, 
+                io.in.bits.pc,
+                Mux(io.in.bits.aluCtrl.alu_islui, 0.U, io.in.bits.rs1data))
+  val src2 = Mux(io.in.bits.aluCtrl.aluSrc, io.in.bits.imm, io.in.bits.rs2data)
+  val aluUnsigned = io.in.bits.aluCtrl.aluUnsigned
+  val valid = io.in.valid  // 指令有效性由RS_alu_Reg保证（已经过滤回滚区间内的指令）
 
   val result = WireDefault(0.U(DATA_WIDTH.W))
-  val cmp    = WireDefault(false.B)
+  val cmp = WireDefault(false.B)
 
   switch(op) {
     is(OP_ADD)  { result := src1 + src2 }
@@ -31,14 +37,18 @@ class Alu extends Module{
   }
 
   val busy = valid && !io.out_ready // 输出有效但下游未准备好时为busy
-  val outValid = valid //输出有效信号 
+  val outValid = valid // 输出有效信号
 
-  io.out.result   := result
-  io.out.cmp      := false.B
-  io.out.zero     := result === 0.U
+  io.out.result := result
+  io.out.cmp := false.B
+  io.out.zero := result === 0.U
+  io.out.outValid := outValid
+  io.out.busy := busy
 
+  // 传递写回物理寄存器信息
+  io.out.phyRd := io.in.bits.phyRd  // 目标物理寄存器编号
+  io.out.robIdx := io.in.bits.robIdx // 对应ROB项目编号
 
-  io.out.outValid := outValid   // 输出是否有效，给下游流水级判断ALU的输出信号是否能够使用
-  io.out.busy     := busy    // 新增busy信号
+  // 处理输入就绪信号 - 当ALU不忙时，可以接收新指令
+  io.in.ready := !busy
 }
-
