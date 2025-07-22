@@ -18,7 +18,8 @@ class IFStage extends Module {
   val instMem = Mem(MEM_INST_SIZE / 4, UInt(INST_WIDTH.W))
 
   // === 连接 PCReg ===
-  pcReg.io.in.redirect := predictor.io.out.redirect
+  pcReg.io.in.predict := predictor.io.out.redirect
+  pcReg.io.in.redirect := io.in.redirect
   pcReg.io.in.stall    := io.in.stall
 
   // === 连接分支预测器 ===

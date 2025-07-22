@@ -16,8 +16,8 @@ class AluIssueEntry extends Bundle {
 
   val useRs2   = Bool()
   val phyRs2   = UInt(PHYS_REG_IDX_WIDTH.W)      // 源寄存器2
-  val rs2data  = UInt(DATA_WIDTH.W)
   val rs2Ready = Bool()                          // 是否就绪
+  val rs2data  = UInt(DATA_WIDTH.W)
 
   val imm      = UInt(DATA_WIDTH.W)              // 立即数
   val pc       = UInt(DATA_WIDTH.W)
@@ -35,7 +35,6 @@ class AluRSIO extends Bundle {
     val enq    = Vec(ISSUE_WIDTH,ValidIO(new AluIssueEntry)) // 从 Dispatch 发射到 ALU RS
     val bypass = Input(Vec(NUM_BYPASS_PORTS, new BypassBus)) // 前馈广播输入
     val rollback = Input(ValidIO(new RsRollbackEntry))
-    val aluReady = Input(Vec(ALU_UNITS, Bool())) // 来自每个 ALU 执行单元的 ready 信号
   }
 
   val out = new Bundle {

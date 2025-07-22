@@ -7,29 +7,30 @@ import config.Configs._
 import config.OoOParams._
 
 
-// LSU保留站到MovUnit的转换适配器
-// 负责将LsuIssueEntry转换为MovIssueEntry，包括传递funct3字段用于掩码计算
-class LsuToMovAdapter extends Module {
-  val io = IO(new Bundle {
-    val in = Flipped(Decoupled(new LsuIssueEntry))   // 从LSU保留站接收
-    val out = Decoupled(new MovIssueEntry)           // 输出到MovUnit
-  })
+// // LSU保留站到MovUnit的转换适配器
+// // 负责将LsuIssueEntry转换为MovIssueEntry，包括传递funct3字段用于掩码计算
+// class LsuToMovAdapter extends Module {
+//   val io = IO(new Bundle {
+//     val in = Flipped(Decoupled(new LsuIssueEntry))   // 从LSU保留站接收
+//     val out = Decoupled(new MovIssueEntry)           // 输出到MovUnit
+//   })
 
-  // 将输入有效性直接传递给输出
-  io.out.valid := io.in.valid
+//   // 将输入有效性直接传递给输出
+//   io.out.valid := io.in.valid
 
-  // 准备好信号反向传递
-  io.in.ready := io.out.ready
+//   // 准备好信号反向传递
+//   io.in.ready := io.out.ready
 
-  // 转换LsuIssueEntry到MovIssueEntry
-  io.out.bits.robIdx := io.in.bits.robIdx
-  io.out.bits.pc := io.in.bits.pc
-  io.out.bits.phyRd := io.in.bits.phyRd
-  io.out.bits.pseudoSrc := io.in.bits.dataOrPseudoSrc
-  io.out.bits.funct3 := io.in.bits.func3            // 将func3传递给funct3用于掩码计算
-  io.out.bits.valid := io.in.bits.valid
-}
+//   // 转换LsuIssueEntry到MovIssueEntry
+//   io.out.bits.robIdx := io.in.bits.robIdx
+//   io.out.bits.pc := io.in.bits.pc
+//   io.out.bits.phyRd := io.in.bits.phyRd
+//   io.out.bits.pseudoSrc := io.in.bits.dataOrPseudoSrc
+//   io.out.bits.funct3 := io.in.bits.func3            // 将func3传递给funct3用于掩码计算
+//   io.out.bits.valid := io.in.bits.valid
+// }
 
+//不需要适配器了，mov指令的ISSue直接使用LsuIssueEntry即可
 // 单周期伪指令处理单元 - 处理寄存器间直接移动指令，支持掩码计算
 // 不需要内部处理回滚，回滚由前级寄存器负责
 class MovUnit extends Module {

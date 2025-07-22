@@ -13,8 +13,8 @@ class BypassUnit extends Module {
   // 暂时直接将 in 端口数据原样输出给 out（直通）
   for (i <- 0 until NUM_BYPASS_PORTS) {
     io.out(i).valid   := io.in(i).valid
-    io.out(i).phyDest := io.in(i).phyDest
+    io.out(i).reg.phyDest := io.in(i).reg.phyDest
     io.out(i).data    := io.in(i).data
-    io.out(i).robIdx  := io.in(i).robIdx
+    io.out(i).reg.robIdx  := io.in(i).reg.robIdx
   }
 }

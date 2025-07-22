@@ -36,7 +36,7 @@ class RenameStageIO extends Bundle {
     val idVec = Input(Vec(ISSUE_WIDTH, new IDBundle)) // 来自 ID 阶段的解码信息
     val isRet = Input(Vec(ISSUE_WIDTH, Bool())) // 每条指令是否是 ret
     val dealloc = Input(
-      Vec(COMMIT_WIDTH, Flipped(ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
+      Vec(MAX_COMMIT_WB, Flipped(ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
     )
     val stall = Input(Bool())
     val flush = Input(Bool())
@@ -65,7 +65,6 @@ class RATIO extends Bundle {
 
     // 回滚请求（ValidIO）
     val rollback = Input(ValidIO(UInt(ADDR_WIDTH.W))) // rollback.valid + rollback.bits
-
     val commit = Input(ValidIO(UInt(ADDR_WIDTH.W))) // 提交成功的分支 PC
   }
 
@@ -82,7 +81,7 @@ class RATIO extends Bundle {
 class FreeListIO extends Bundle {
   val in = new Bundle {
     val allocate = Input(Vec(ISSUE_WIDTH, Bool()))
-    val dealloc  = Input(Vec(COMMIT_WIDTH, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
+    val dealloc  = Input(Vec(MAX_COMMIT_WB, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
     val flush    = Input(Bool()) // 分支回滚
     val snapshotTail = Input(UInt(log2Ceil(FREELIST_SIZE).W)) // 回滚目标指针
   }

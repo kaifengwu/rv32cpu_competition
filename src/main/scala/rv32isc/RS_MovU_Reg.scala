@@ -8,8 +8,8 @@ import bundles._
 
 // MovUnit保留站到MovUnit执行单元的单指令流水寄存器接口
 class RS_MovU_RegIO extends Bundle {
-  val in = Flipped(Decoupled(new MovIssueEntry))  // 从MovUnit保留站接收单条指令
-  val out = Decoupled(new MovIssueEntry)         // 发送到MovUnit执行单元
+  val in = Flipped(Decoupled(new LsuIssueEntry))  // 从MovUnit保留站接收单条指令
+  val out = Decoupled(new LsuIssueEntry)         // 发送到MovUnit执行单元
   val stall = Input(Bool())                      // 流水线阻塞信号
   val flush = Input(Bool())                      // 流水线冲刷信号
 
@@ -24,7 +24,7 @@ class RS_MovU_Reg extends Module {
 
   // 寄存器状态
   val valid = RegInit(false.B)
-  val data = RegInit(0.U.asTypeOf(new MovIssueEntry))
+  val data = RegInit(0.U.asTypeOf(new LsuIssueEntry))
 
   // 判断当前指令是否在回滚区间内 - 优化环形判断逻辑
   val inRollbackRange = WireDefault(false.B)
@@ -46,7 +46,7 @@ class RS_MovU_Reg extends Module {
   when (internal_flush) {
     // 在目标区域时，冲刷信号优先，清空寄存器状态
     valid := false.B
-    data := 0.U.asTypeOf(new MovIssueEntry)
+    data := 0.U.asTypeOf(new LsuIssueEntry)
   }.elsewhen (io.rollback.valid && !inRollbackRange) {
     // 不在目标区域但有回滚信号时，区分两种情况处理
     when (io.in.fire()) {
@@ -56,7 +56,7 @@ class RS_MovU_Reg extends Module {
     }.otherwise {
       // 情况2：下一周期保留站不发送新指令，flush现有数据
       valid := false.B
-      data := 0.U.asTypeOf(new MovIssueEntry)
+      data := 0.U.asTypeOf(new LsuIssueEntry)
     }
   }.elsewhen (!io.stall) {
     // 非阻塞状态下正常传输数据
@@ -70,7 +70,7 @@ class RS_MovU_Reg extends Module {
 
   // 输入准备信号逻辑：修改为只要不需要回滚就置1
   // 按照要求，除非需要回滚，否则ready信号都置1
-  io.in.ready := !io.rollback.valid || !inRollbackRange
+  io.in.ready := !io.rollback.valid 
 
   // 输出有效信号和数据 - 确保回滚时不输出错误数据
   io.out.valid := valid && !internal_flush
