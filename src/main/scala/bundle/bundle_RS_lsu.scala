@@ -25,8 +25,6 @@ class LsuIssueEntry extends Bundle {
   val func3 = UInt(3.W)
 
   val imm = UInt(DATA_WIDTH.W)
-  val memCtrl = new MemCtrlBundle
-
    // 若是伪指令，则以下字段有效
   val isMov = Bool()                         // 是否为伪指令;
 }
@@ -35,10 +33,9 @@ class LsuIssueEntry extends Bundle {
 
 class LsuRSIO extends Bundle {
   val in = new Bundle {
-    val enq = Flipped(Vec(ISSUE_WIDTH, Decoupled(new LsuIssueEntry)))   // 多发射入队
+    val enq = Input(Vec(ISSUE_WIDTH, ValidIO(new LsuIssueEntry)))   // 多发射入队
     val bypass = Input(Vec(NUM_BYPASS_PORTS, new BypassBus))            // 前馈广播输入
     val rollback = Input(ValidIO(new RsRollbackEntry))
-    val lsuReady = Input(Vec(ALU_UNITS, Bool())) // 来自每个 LSU 执行单元的 ready 信号
   }
 
   val out = new Bundle {

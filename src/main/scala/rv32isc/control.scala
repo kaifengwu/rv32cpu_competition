@@ -15,12 +15,13 @@ class Control extends Module {
     val funct7 = io.in.funct7(i)
 
     // === ALU 控制 ===
-    val (aluOp, aluSrc, aluUnsigned) = AluDecoder(opcode, funct3, funct7)
+    val (aluOp, aluSrc, aluUnsigned,aluOpValid) = AluDecoder(opcode, funct3, funct7)
     io.out.aluCtrl(i).aluOp       := aluOp
     io.out.aluCtrl(i).aluSrc      := aluSrc
     io.out.aluCtrl(i).aluUnsigned := aluUnsigned
     io.out.aluCtrl(i).aluIsAuipc  := opcode === OP_AUIPC
     io.out.aluCtrl(i).aluIsLui    := opcode === OP_LUI
+    io.out.aluCtrl(i).aluOpValid  := aluOpValid
 
     // === Mem 控制 ===
     val (memRead, memWrite) = MemDecoder(opcode)
@@ -44,10 +45,11 @@ class Control extends Module {
 }
 
 object AluDecoder {
-  def apply(opcode: UInt, funct3: UInt, funct7: UInt): (UInt, Bool, Bool) = {
+  def apply(opcode: UInt, funct3: UInt, funct7: UInt): (UInt, Bool, Bool, Bool) = {
     val op      = WireDefault(UInt(4.W),OP_NOP)
     val aluSrc  = WireDefault(false.B)
     val aluUnsigned = WireDefault(false.B)
+    val aluOpValid = WireDefault(false.B)
 //  	val isCSR = opcode === OP_SYSTEM && (
 //  	  funct3 === F3_CSRRW  || funct3 === F3_CSRRS  || funct3 === F3_CSRRC ||
 //  	  funct3 === F3_CSRRWI || funct3 === F3_CSRRSI || funct3 === F3_CSRRCI
@@ -55,6 +57,7 @@ object AluDecoder {
 
     // R-type 指令（寄存器+寄存器）
     when (opcode === OP_R) {
+      aluOpValid := true.B
       aluSrc := false.B
       switch (funct3) {
         is (F3_ADD_SUB) {
@@ -77,6 +80,7 @@ object AluDecoder {
 
     // I-type 指令（寄存器+立即数）
     } .elsewhen (opcode === OP_I) {
+      aluOpValid := true.B
       aluSrc := true.B
       switch (funct3) {
         is (F3_ADD_SUB) { op := OP_ADD }
@@ -101,6 +105,7 @@ object AluDecoder {
 
     // LUI / AUIPC → 使用立即数
     } .elsewhen (opcode === OP_LUI || opcode === OP_AUIPC) {
+      aluOpValid := true.B
       aluSrc := true.B
       op := OP_ADD
     } .elsewhen (opcode === OP_BRANCH) {
@@ -128,7 +133,7 @@ object AluDecoder {
 			op := OP_NOP
 	}
 
-    (op, aluSrc,aluUnsigned)
+    (op, aluSrc,aluUnsigned,aluOpValid)
   }
 }
 

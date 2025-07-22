@@ -176,14 +176,26 @@ class ROB extends Module {
     }
   }
 
-  for(i <- 0 until MAX_COMMIT_WB){ 
-    io.out.commit_wb(i) := Wb_Wire(i)
+  when(!io.in.rollback.valid){
+    for(i <- 0 until MAX_COMMIT_WB){ 
+      io.out.commit_wb(i) := Wb_Wire(i)
+    }
+    for(i <- 0 until MAX_COMMIT_STORE){ 
+      io.out.commit_store(i) := Store_Wire(i)
+    }
+  }.otherwise{
+    for(i <- 0 until MAX_COMMIT_WB){ 
+      io.out.commit_wb(i) := 0.U.asTypeOf(new RobCommitWbEntry)
+    }
+    for(i <- 0 until MAX_COMMIT_STORE){ 
+      io.out.commit_store(i) := 0.U.asTypeOf(new RobCommitStoreEntry)
+    }
   }
-  for(i <- 0 until MAX_COMMIT_STORE){ 
-    io.out.commit_store(i) := Store_Wire(i)
-  }
+
   io.out.tail := tail
 }
+
+
 
 class RobIndexAllocator extends Module {
   val io = IO(new RobIndexAllocatorIO)
@@ -213,7 +225,7 @@ class RobIndexAllocator extends Module {
   }
 
   // 指针更新
-  when(!io.out.isFull && !io.in.rollback.valid) {
+  when(!io.out.isFull && !io.in.rollback.valid && !io.in.stall) {
     tailPtr := tailPtr + allocCount
   }.elsewhen(io.in.rollback.valid){ 
     tailPtr := io.in.rollback.bits

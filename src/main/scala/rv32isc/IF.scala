@@ -20,6 +20,7 @@ class IFStage extends Module {
   // === 连接 PCReg ===
   pcReg.io.in.predict := predictor.io.out.redirect
   pcReg.io.in.redirect := io.in.redirect
+  pcReg.io.in.retTarget := io.in.retTarget
   pcReg.io.in.stall    := io.in.stall
 
   // === 连接分支预测器 ===
@@ -40,6 +41,8 @@ class IFStage extends Module {
     IFBundleVec(i).pc         := pcReg.io.out.pcVec(i)
     IFBundleVec(i).inst       := instVec(i)
     IFBundleVec(i).isJump := predictor.io.out.redirect.valid
+    IFBundleVec(i).jumpTarget := predictor.io.out.redirect.bits
+    IFBundleVec(i).isBubble := false.B
   }
 
   // === IF/ID Reg 连接 ===

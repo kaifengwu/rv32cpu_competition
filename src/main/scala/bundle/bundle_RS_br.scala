@@ -28,8 +28,6 @@ class BrIssueEntry extends Bundle {
   val isJal    = Bool()                        // 是否为 jal
   val isJalr   = Bool()                        // 是否为 jalr
   val PredictTarget = UInt(ADDR_WIDTH.W) // 预测跳转目标地址
-
-  val valid    = Bool()
 }
 
 class BrRSIO extends Bundle {

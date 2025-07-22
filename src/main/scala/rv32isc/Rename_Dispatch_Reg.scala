@@ -17,9 +17,7 @@ class RenameDispatchReg extends Module {
     isRet := false.B
   } .elsewhen (!io.in.stall) {
     renameVecReg := io.in.renameVec
-    isRet := io.in.isRet
   }
 
   io.out.renameVec := renameVecReg
-  io.out.isRet := isRet
 }

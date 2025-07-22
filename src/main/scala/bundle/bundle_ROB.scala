@@ -69,8 +69,8 @@ class RobIndexAllocatorIO extends Bundle {
     val allocateValid = Input(Vec(ISSUE_WIDTH, Bool()))
     val commitValid   = Input(Vec(MAX_COMMIT_WIDTH, Bool()))
     val rollback      = Input(ValidIO(UInt(ROB_IDX_WIDTH.W)))
+    val stall = Input(Bool()) // 阶段停顿
   }
-
   val out = new Bundle {
     val allocateIdx = Output(Vec(ISSUE_WIDTH, UInt(ROB_IDX_WIDTH.W))) // 分配编号
     val isFull   = Output(Bool()) // ROB满

@@ -17,9 +17,10 @@ class RenameStage extends Module {
   val rename_dispatch_regs = Seq.fill(FETCH_WIDTH)(Module(new RenameDispatchReg))
 
   // === 提交释放接口直通（由外部 COMMIT 阶段驱动） ===
-  for(i <- 0 until MAX_COMMIT_WB)
-  freelist.io.in.dealloc(i) := io.in.dealloc(i)
-
+  for(i <- 0 until MAX_COMMIT_WB){
+    freelist.io.in.dealloc(i) := io.in.dealloc(i)
+  }
+  freelist.io.in.rollbackTail := io.in.rollbackTail
   // === 向 FreeList 提交申请信息 ===
   val needAllocVec = Wire(Vec(ISSUE_WIDTH, Bool()))
   for (i <- 0 until MAX_COMMIT_WB) {
@@ -43,45 +44,36 @@ class RenameStage extends Module {
     val idEntry = io.in.idVec(i)
     val renamed = Wire(new RenameBundle)
 
-    renamed.valid     := true.B
-    renamed.isRet     := io.in.isRet(i)
+    renamed.isRet     := io.in.idVec(i).isRet
     renamed.logicRegs := idEntry.regs
     renamed.useRs1    := idEntry.useRs1
     renamed.useRs2    := idEntry.useRs2
     renamed.ctrl      := idEntry.ctrl
     renamed.imm       := idEntry.imm
     renamed.func3     := idEntry.func3
-    renamed.phyRd     := freelist.io.out.phyRd(i)
+    renamed.jumpTarget := idEntry.jumpTarget
+    renamed.pc        := idEntry.pc
+    //rat
     renamed.oldPhyRd  := rat.io.out.oldPhyRd(i)
+    renamed.phyRs1    := rat.io.out.phyRs1(i)
+    renamed.phyRs2    := rat.io.out.phyRs2(i)
 
+    renamed.robIdx    := io.in.robIdx(i)
+
+
+    //给rob分配器的信号
+    io.out.allocateValid(i) := !io.in.idVec(i).isBubble
+    //freelist
+    renamed.phyRd     := freelist.io.out.phyRd(i)
+    renamed.tailPtr   := freelist.io.out.tailPtr
+
+    //rob
+    
     // === RAW bypass for rs1 ===
-    val rs1MatchVec = Wire(Vec(i, Bool()))
-    for (j <- 0 until i) {
-      rs1MatchVec(j) := needAllocVec(j) &&
-                        (idEntry.useRs1 && (idEntry.regs.rs1 === io.in.idVec(j).regs.rd))
-    }
-    val rs1Bypass = rs1MatchVec.asUInt.orR
-    val rs1BypassIdx = PriorityEncoder(rs1MatchVec.reverse)
-    val rs1BypassVal = freelist.io.out.phyRd(rs1BypassIdx)
-    renamed.phyRs1 := Mux(rs1Bypass, rs1BypassVal, rat.io.out.phyRs1(i))
-
-    // === RAW bypass for rs2 ===
-    val rs2MatchVec = Wire(Vec(i, Bool()))
-    for (j <- 0 until i) {
-      rs2MatchVec(j) := needAllocVec(j) &&
-                        (idEntry.useRs2 && (idEntry.regs.rs2 === io.in.idVec(j).regs.rd))
-    }
-    val rs2Bypass = rs2MatchVec.asUInt.orR
-    val rs2BypassIdx = PriorityEncoder(rs2MatchVec.reverse)
-    val rs2BypassVal = freelist.io.out.phyRd(rs2BypassIdx)
-    renamed.phyRs2 := Mux(rs2Bypass, rs2BypassVal, rat.io.out.phyRs2(i))
-
     rename_dispatch_regs(i).io.in.renameVec := renamed
-    rename_dispatch_regs(i).io.in.isRet := io.in.isRet(i)
     rename_dispatch_regs(i).io.in.stall := io.in.stall(i)
-    rename_dispatch_regs(i).io.in.flush := io.in.flush(i)
+    rename_dispatch_regs(i).io.in.flush := io.in.flush(i) || io.in.idVec(i).isBubble
 
-    io.out.isRet(i) := rename_dispatch_regs(i).io.out.isRet
     io.out.renameVec(i) := rename_dispatch_regs(i).io.out.renameVec
   }
 }
