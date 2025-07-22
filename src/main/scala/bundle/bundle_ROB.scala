@@ -68,6 +68,7 @@ class RobIndexAllocatorIO extends Bundle {
   val in = new Bundle {
     val allocateValid = Input(Vec(ISSUE_WIDTH, Bool()))
     val commitValid   = Input(Vec(MAX_COMMIT_WIDTH, Bool()))
+    val rollback      = Input(ValidIO(UInt(ROB_IDX_WIDTH.W)))
   }
 
   val out = new Bundle {

@@ -185,3 +185,41 @@ class ROB extends Module {
   io.out.tail := tail
 }
 
+class RobIndexAllocator extends Module {
+  val io = IO(new RobIndexAllocatorIO)
+
+  // 环形缓冲指针：使用 ROB_IDX_WIDTH + 1 位（含 wrap 位）
+  val headPtr = RegInit(0.U((ROB_IDX_WIDTH + 1).W))
+  val tailPtr = RegInit(0.U((ROB_IDX_WIDTH + 1).W))
+
+  // 当前分配和提交数量
+  val allocCount  = PopCount(io.in.allocateValid)
+  val commitCount = PopCount(io.in.commitValid)
+
+  // ROB 剩余空间计算（考虑 wrap）
+  val freeCount = Wire(UInt((ROB_IDX_WIDTH + 1).W))
+  when(tailPtr >= headPtr) {
+    freeCount := ROB_SIZE.U - (tailPtr - headPtr)
+  } .otherwise {
+    freeCount := headPtr - tailPtr
+  }
+
+  // 是否已满
+  io.out.isFull := freeCount < allocCount
+
+  // 分配编号输出（截断掉 wrap 位）
+  for (i <- 0 until ISSUE_WIDTH) {
+    io.out.allocateIdx(i) := (tailPtr + i.U)(ROB_IDX_WIDTH - 1, 0)
+  }
+
+  // 指针更新
+  when(!io.out.isFull && !io.in.rollback.valid) {
+    tailPtr := tailPtr + allocCount
+  }.elsewhen(io.in.rollback.valid){ 
+    tailPtr := io.in.rollback.bits
+  }
+
+  when(!io.in.rollback.valid){
+    headPtr := headPtr + commitCount
+  }
+}

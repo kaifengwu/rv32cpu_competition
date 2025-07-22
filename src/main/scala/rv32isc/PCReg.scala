@@ -14,6 +14,8 @@ class PCReg extends Module {
   // PC 更新逻辑：redirect > 顺序
   when(io.in.redirect.valid) {
     pc := io.in.redirect.bits
+  }.elsewhen(io.in.predict.valid && !io.in.redirect.valid){
+    pc := io.in.predict.bits
   }.elsewhen(!io.in.stall) {
     pc := pc + (4 * FETCH_WIDTH).U
   }
