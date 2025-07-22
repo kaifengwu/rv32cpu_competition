@@ -46,10 +46,8 @@ class ROB extends Module {
   for (i <- 0 until EXEC_UNITS) {
     val wb = io.in.writeback(i)
     val idx = wb.bits.robIdx
-  
-  // 如果 rollback.valid，则写回仅允许不在回滚区间的 robIdx
+    // 如果 rollback.valid，则写回仅允许不在回滚区间的 robIdx
     val notRolledBack = WireDefault(true.B)
-  
     when(io.in.rollback.valid) {
       when(tail >= io.in.rollback.bits) {
         // 普通情况：[rollback, tail)

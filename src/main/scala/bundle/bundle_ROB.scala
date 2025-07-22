@@ -49,7 +49,7 @@ class RobFlushBundle extends Bundle {
 
 class ROBIO extends Bundle {
   val in = new Bundle {
-    val allocate  = Flipped(Vec(ISSUE_WIDTH, ValidIO(new RobAllocateEntry)))
+    val allocate  = Input(Vec(ISSUE_WIDTH, ValidIO(new RobAllocateEntry)))
     val writeback = Input(Vec(EXEC_UNITS, ValidIO(new RobWritebackEntry)))
     // 使用 ValidIO 封装回滚请求
     val rollback = Input(ValidIO(UInt(ROB_IDX_WIDTH.W))) // .valid + .bits

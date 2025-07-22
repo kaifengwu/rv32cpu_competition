@@ -14,7 +14,7 @@ class PRFBundle extends Bundle {
     }))
 
     // === 提交端口（来自 ROB）：标记这些物理寄存器可以释放 ===
-    val commit = Vec(COMMIT_WIDTH, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W)))
+//      val commit = Vec(MAX_COMMIT_WB, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W)))
 
     // === 新目标寄存器分配（来自 Rename）：需清除 valid 位 ===
     val allocValid   = Vec(ISSUE_WIDTH, Bool())

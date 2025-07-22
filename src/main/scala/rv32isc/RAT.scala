@@ -21,7 +21,7 @@ class RAT extends Module {
     Vec(SNAP_DEPTH, Vec(ARCH_REG_NUM, UInt(PHYS_REG_IDX_WIDTH.W)))
   )
   val snapshotTags = Reg(Vec(SNAP_DEPTH, UInt(ADDR_WIDTH.W)))
-  val headPtr = RegInit(0.U(log2Ceil(SNAP_DEPTH).W))
+  val tailPtr = RegInit(0.U(log2Ceil(SNAP_DEPTH).W))
 
   // === 查询映射 ===
   for (i <- 0 until ISSUE_WIDTH) {
@@ -40,9 +40,9 @@ class RAT extends Module {
   // === 创建快照 ===
   for (i <- 0 until ISSUE_WIDTH) {
     when(io.in.snapshot(i).valid) {
-      snapshotTables(headPtr) := table
-      snapshotTags(headPtr) := io.in.snapshot(i).bits
-      headPtr := (headPtr + 1.U) % SNAP_DEPTH.U
+      snapshotTables(tailPtr) := table
+      snapshotTags(tailPtr) := io.in.snapshot(i).bits
+      tailPtr := (tailPtr + 1.U)(log2Ceil(SNAP_DEPTH) - 1 , 0 )
     }
   }
 
@@ -61,17 +61,17 @@ class RAT extends Module {
 
     when(rollbackHit) {
       table := snapshotTables(rollbackIdx)
-      headPtr := Mux(rollbackIdx === 0.U, (SNAP_DEPTH - 1).U, rollbackIdx - 1.U)
+      tailPtr := Mux(rollbackIdx === 0.U, (SNAP_DEPTH - 1).U, rollbackIdx - 1.U)
     }
   }
 
-  val tailPtr = RegInit(0.U(log2Ceil(SNAP_DEPTH).W))
+  val headPtr = RegInit(0.U(log2Ceil(SNAP_DEPTH).W))
 
 // === 分支成功后清除快照 ===
   when(io.in.commit.valid) {
-    when(snapshotTags(tailPtr) === io.in.commit.bits) {
-      snapshotTags(tailPtr) := 0.U
-      tailPtr := Mux(tailPtr === (SNAP_DEPTH - 1).U, 0.U, tailPtr + 1.U)
+    when(snapshotTags(headPtr) === io.in.commit.bits) {
+      snapshotTags(headPtr) := 0.U
+      headPtr := Mux(headPtr === (SNAP_DEPTH - 1).U, 0.U, headPtr + 1.U)
     }
   }
 }

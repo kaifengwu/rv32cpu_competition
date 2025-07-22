@@ -17,12 +17,12 @@ class RenameStage extends Module {
   val rename_dispatch_regs = Seq.fill(FETCH_WIDTH)(Module(new RenameDispatchReg))
 
   // === 提交释放接口直通（由外部 COMMIT 阶段驱动） ===
-  for(i <- 0 until COMMIT_WIDTH)
+  for(i <- 0 until MAX_COMMIT_WB)
   freelist.io.in.dealloc(i) := io.in.dealloc(i)
 
   // === 向 FreeList 提交申请信息 ===
   val needAllocVec = Wire(Vec(ISSUE_WIDTH, Bool()))
-  for (i <- 0 until COMMIT_WIDTH) {
+  for (i <- 0 until MAX_COMMIT_WB) {
     val idEntry = io.in.idVec(i)
     needAllocVec(i) := idEntry.ctrl.wbCtrl.regWrite && (idEntry.regs.rd =/= 0.U)
   }
