@@ -25,7 +25,7 @@ class LsuIssueEntry extends Bundle {
   val func3 = UInt(3.W)
 
   val imm = UInt(DATA_WIDTH.W)
-  val memCtrl = new MemCtrlBundle
+  //val memCtrl = new MemCtrlBundle
 
    // 若是伪指令，则以下字段有效
   val isMov = Bool()                         // 是否为伪指令;

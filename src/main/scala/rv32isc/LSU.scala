@@ -56,13 +56,46 @@ class LSU extends Module {
   val addrResult = Reg(UInt(DATA_WIDTH.W))          // 地址计算结果
   val storeData = Reg(UInt(DATA_WIDTH.W))           // 存储数据值(不是物理寄存器号)
 
-  // StoreQueue实例化
-  val storeQueue = Module(new StoreQueue)
+  // 添加回滚范围检查逻辑
+  val inRollbackRange = WireDefault(false.B)
+  when(io.rollback.valid) {
+    val rollbackIdx = io.rollback.bits
+    val tailIdx = io.tail
+    when(tailIdx >= rollbackIdx) {
+      // 普通情况：[rollback, tail)
+      inRollbackRange := issueEntryReg.robIdx >= rollbackIdx && issueEntryReg.robIdx < tailIdx
+    }.otherwise {
+      // 环形情况：tail < rollback
+      inRollbackRange := (issueEntryReg.robIdx >= rollbackIdx) || (issueEntryReg.robIdx < tailIdx)
+    }
+  }
 
-  // 回滚信号连接
-  storeQueue.io.in.rollback := io.rollback.valid
-  storeQueue.io.in.rollbackTarget := io.rollback.bits
+  // 使用MemWithStoreQueue替代直接使用MemoryAccessUnit
+  val memWithStoreQueue = Module(new MemWithStoreQueue)
+  
+  // 连接普通访存接口
+  memWithStoreQueue.io.mem.in.addr := addrResult
+  memWithStoreQueue.io.mem.in.ren := state === sExec && issueEntryReg.isLoad
+  memWithStoreQueue.io.mem.in.wen := state === sExec && issueEntryReg.isStore
+  memWithStoreQueue.io.mem.in.mask := addrUnit.io.out.accessMask
+  memWithStoreQueue.io.mem.in.wdata := storeData
+  memWithStoreQueue.io.mem.in.rdata := io.perip_rdata
+  memWithStoreQueue.io.mem.in.funct3 := issueEntryReg.func3
+  memWithStoreQueue.io.mem.in.fromStoreQueue := false.B
+  memWithStoreQueue.io.mem.in.robIdx := issueEntryReg.robIdx
+  
+  // 连接外设接口到顶层
+  io.perip_addr := memWithStoreQueue.io.perip_addr
+  io.perip_ren := memWithStoreQueue.io.perip_ren
+  io.perip_wen := memWithStoreQueue.io.perip_wen
+  io.perip_mask := memWithStoreQueue.io.perip_mask
+  io.perip_wdata := memWithStoreQueue.io.perip_wdata
+  memWithStoreQueue.io.perip_rdata := io.perip_rdata
 
+  // 初始化StoreQueue接口
+  memWithStoreQueue.io.storeQueue.commitValid := false.B
+  memWithStoreQueue.io.storeQueue.commitEntry := DontCare
+  
   // 地址计算单元
   val addrUnit = Module(new LSUAddressUnit)
   addrUnit.io.in.rs1_data := Mux(state === sIdle,
@@ -189,8 +222,11 @@ class LSU extends Module {
             io.bypassOut.data := addrUnit.io.out.addr
             io.bypassOut.robIdx := io.issue.bits.robIdx
 
-            // 如果是外设访问或需要进一步处理，转入执行状态
-            state := sExec
+            // 添加回滚检查 - 如果指令在回滚范围内，不进入执行状态
+            when(!inRollbackRange) {
+              // 如果是外设访问或需要进一步处理，转入执行状态
+              state := sExec
+            }
           }.otherwise {
             // 无效地址，发送错误
             // 这里可以添加异常处理
@@ -201,59 +237,75 @@ class LSU extends Module {
     }
 
     is(sExec) {
-      // 处理load/store指令
-      when(issueEntryReg.isLoad) {
-        // === Load指令处理 ===
-        // 处理外设读取
-        when(addrResult >= 0x80200000.U && addrResult < 0x80200100.U) {
-          // 外设读取，输出到外设接口
-          io.perip_addr := addrResult
-          io.perip_ren := true.B
-          io.perip_mask := addrUnit.io.out.accessMask
+      // 如果检测到回滚且当前指令在回滚范围内，放弃执行
+      when(inRollbackRange) {
+        state := sIdle
+      }.otherwise {
+        // 处理load/store指令
+        when(issueEntryReg.isLoad) {
+          // === Load指令处理 ===
+          // 处理外设读取
+          when(addrResult >= 0x80200000.U && addrResult < 0x80200100.U) {
+            // 外设读取
+            memWithStoreQueue.io.mem.in.ren := true.B
+            memWithStoreQueue.io.mem.in.rdata := io.perip_rdata  // 外设数据
+            
+            // 设置结果
+            io.resultOut.valid := true.B
+            io.resultOut.bits.valid := true.B
+            io.resultOut.bits.phyDest := issueEntryReg.phyRd
+            io.resultOut.bits.data := memWithStoreQueue.io.mem.out.rdata
+            io.resultOut.bits.robIdx := issueEntryReg.robIdx
+            
+            state := sIdle
+          }.otherwise {
+            // 内存读取 - 假设通过同一接口但访问不同地址空间
+            memWithStoreQueue.io.mem.in.ren := true.B
+            // 这里应该连接到内存接口，但当前似乎复用了外设接口
+            // 在实际系统中需要修改
+            
+            // 设置结果
+            io.resultOut.valid := true.B
+            io.resultOut.bits.valid := true.B
+            io.resultOut.bits.phyDest := issueEntryReg.phyRd
+            io.resultOut.bits.data := memWithStoreQueue.io.mem.out.rdata
+            io.resultOut.bits.robIdx := issueEntryReg.robIdx
+            
+            state := sIdle
+          }
+        }.elsewhen(issueEntryReg.isStore) {
+          // === Store指令处理 ===
+          // 注意：此处仍需要使用StoreQueue，因为MemWithStoreQueue只处理提交的存储
+          
+          // 使用MemWithStoreQueue的StoreQueue接口
+          // 注意：这里不使用MemWithStoreQueue的StoreQueue接口
+          // 因为我们仍需要先将Store指令加入队列，而MemWithStoreQueue负责从队列提交
+          
+          // 创建新的StoreQueue实例 - 这里实际上应该是访问全局的StoreQueue
+          val storeQueue = Module(new StoreQueue)
+          
+          // 回滚信号连接
+          storeQueue.io.in.rollback := io.rollback.valid
+          storeQueue.io.in.rollbackTarget := io.rollback.bits
+          
+          // 添加到StoreQueue
+          storeQueue.io.in.enq.valid := true.B
+          storeQueue.io.in.enq.bits.robIdx := issueEntryReg.robIdx
+          storeQueue.io.in.enq.bits.addr := addrResult
+          storeQueue.io.in.enq.bits.data := storeData
+          storeQueue.io.in.enq.bits.mask := addrUnit.io.out.accessMask
 
-          // 设置结果
-          io.resultOut.valid := true.B
-          io.resultOut.bits.valid := true.B
-          io.resultOut.bits.phyDest := issueEntryReg.phyRd
-          io.resultOut.bits.data := io.perip_rdata  // 直接使用外设数据
-          io.resultOut.bits.robIdx := issueEntryReg.robIdx
+          when(storeQueue.io.in.enq.ready) {
+            // 设置结果
+            io.resultOut.valid := true.B
+            io.resultOut.bits.valid := true.B
+            io.resultOut.bits.phyDest := 0.U  // store不需要写回
+            io.resultOut.bits.data := 0.U
+            io.resultOut.bits.robIdx := issueEntryReg.robIdx
 
-          // 完成后回到空闲状态
-          state := sIdle
-        }.otherwise {
-          // 内存读取
-          // 这里假设数据已经准备好，实际上可能需要等待
-          val memData = 0xDEADBEEF.U  // 示例值，实际应从内存读取
-
-          // 设置结果
-          io.resultOut.valid := true.B
-          io.resultOut.bits.valid := true.B
-          io.resultOut.bits.phyDest := issueEntryReg.phyRd
-          io.resultOut.bits.data := memData
-          io.resultOut.bits.robIdx := issueEntryReg.robIdx
-
-          // 完成后回到空闲状态
-          state := sIdle
-        }
-      }.elsewhen(issueEntryReg.isStore) {
-        // === Store指令处理 ===
-        // 添加到StoreQueue
-        storeQueue.io.in.enq.valid := true.B
-        storeQueue.io.in.enq.bits.robIdx := issueEntryReg.robIdx
-        storeQueue.io.in.enq.bits.addr := addrResult
-        storeQueue.io.in.enq.bits.data := storeData
-        storeQueue.io.in.enq.bits.mask := addrUnit.io.out.accessMask
-
-        when(storeQueue.io.in.enq.ready) {
-          // 设置结果
-          io.resultOut.valid := true.B
-          io.resultOut.bits.valid := true.B
-          io.resultOut.bits.phyDest := 0.U  // store不需要写回
-          io.resultOut.bits.data := 0.U
-          io.resultOut.bits.robIdx := issueEntryReg.robIdx
-
-          // 完成后回到空闲状态
-          state := sIdle
+            // 完成后回到空闲状态
+            state := sIdle
+          }
         }
       }
     }

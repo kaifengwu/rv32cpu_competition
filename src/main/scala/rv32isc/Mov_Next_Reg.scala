@@ -20,8 +20,7 @@ class Mov_Next_RegIO extends Bundle {
   val flush = Input(Bool())                           // 外部冲刷信号
 
   // 回滚相关信号 - 确保同步清空
-  val rollback = Input(Valid(UInt(ROB_IDX_WIDTH.W)))  // 回滚信号和回滚点
-  val tail = Input(UInt(ROB_IDX_WIDTH.W))             // ROB尾指针
+  val rollback = Input(Valid(new RsRollbackEntry))    // 回滚信号和回滚点
 }
 
 // MovUnit到下一级的流水寄存器实现
@@ -35,12 +34,14 @@ class Mov_Next_Reg extends Module {
   // 判断当前指令是否在回滚区间内 - 优化环形判断逻辑
   val inRollbackRange = WireDefault(false.B)
   when(io.rollback.valid && valid) {
-    when(io.tail >= io.rollback.bits) {
+    val rollbackIdx = io.rollback.bits.rollbackIdx
+    val tailIdx = io.rollback.bits.tailIdx
+    when(tailIdx >= rollbackIdx) {
       // 普通情况：[rollback, tail)
-      inRollbackRange := reg.robIdx >= io.rollback.bits && reg.robIdx < io.tail
+      inRollbackRange := reg.robIdx >= rollbackIdx && reg.robIdx < tailIdx
     }.otherwise {
       // 环形情况：tail < rollback
-      inRollbackRange := (reg.robIdx >= io.rollback.bits) || (reg.robIdx < io.tail)
+      inRollbackRange := (reg.robIdx >= rollbackIdx) || (reg.robIdx < tailIdx)
     }
   }
 

@@ -14,8 +14,7 @@ class RS_MovU_RegIO extends Bundle {
   val flush = Input(Bool())                      // 流水线冲刷信号
 
   // 回滚相关信号
-  val rollback = Input(Valid(UInt(ROB_IDX_WIDTH.W))) // 回滚信号和回滚点
-  val tail = Input(UInt(ROB_IDX_WIDTH.W))            // ROB尾指针
+  val rollback = Input(Valid(new RsRollbackEntry)) // 回滚信号和回滚点          // ROB尾指针
 }
 
 // MovUnit保留站到MovUnit执行单元的单指令流水寄存器实现
@@ -30,12 +29,14 @@ class RS_MovU_Reg extends Module {
   val inRollbackRange = WireDefault(false.B)
   when(io.rollback.valid && valid) {
     val robIdx = data.robIdx
-    when(io.tail >= io.rollback.bits) {
+    val rollbackIdx = io.rollback.bits.rollbackIdx
+    val tailIdx = io.rollback.bits.tailIdx
+    when(tailIdx >= rollbackIdx) {
       // 普通情况：[rollback, tail)
-      inRollbackRange := robIdx >= io.rollback.bits && robIdx < io.tail
+      inRollbackRange := robIdx >= rollbackIdx && robIdx < tailIdx
     }.otherwise {
       // 环形情况：tail < rollback
-      inRollbackRange := (robIdx >= io.rollback.bits) || (robIdx < io.tail)
+      inRollbackRange := (robIdx >= rollbackIdx) || (robIdx < tailIdx)
     }
   }
 
