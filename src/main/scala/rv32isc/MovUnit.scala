@@ -25,7 +25,7 @@ class LsuToMovAdapter extends Module {
   io.out.bits.robIdx := io.in.bits.robIdx
   io.out.bits.pc := io.in.bits.pc
   io.out.bits.phyRd := io.in.bits.phyRd
-  io.out.bits.pseudoSrc := io.in.bits.pseudoSrc
+  io.out.bits.pseudoSrc := io.in.bits.dataOrPseudoSrc
   io.out.bits.funct3 := io.in.bits.func3            // 将func3传递给funct3用于掩码计算
   io.out.bits.valid := io.in.bits.valid
 }

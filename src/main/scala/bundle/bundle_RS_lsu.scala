@@ -16,8 +16,8 @@ class LsuIssueEntry extends Bundle {
   val phyAddrBase = UInt(PHYS_REG_IDX_WIDTH.W)     // 地址基址寄存器
   val addrReady = Bool()                           // 地址是否准备好
 
-  val phyStoreData = UInt(PHYS_REG_IDX_WIDTH.W)    // Store 写入数据寄存器
-  val dataReady = Bool()                           // 写入数据是否就绪
+  val dataOrPseudoSrc = UInt(PHYS_REG_IDX_WIDTH.W)    // Store写入数据寄存器或伪指令来源，合并了store和mov伪指令
+  val dataReady = Bool()                           // 数据是否就绪
 
   val func3 = UInt(3.W)
 
@@ -28,7 +28,6 @@ class LsuIssueEntry extends Bundle {
 
   // 若是伪指令，则以下字段有效
   val isPseudoMov = Bool()                         // 是否为伪指令
-  val pseudoSrc = UInt(PHYS_REG_IDX_WIDTH.W)       // 伪指令来源
 }
 
 class LsuRSIO extends Bundle {

@@ -64,7 +64,7 @@ class LsuReservationStation extends Module {
             st.imm === rawEntry.imm
         ) {
           pseudoEntry.isPseudoMov := true.B
-          pseudoEntry.pseudoSrc := st.phyStoreData
+          pseudoEntry.dataOrPseudoSrc := st.dataOrPseudoSrc
         }
       }
 
@@ -83,21 +83,15 @@ class LsuReservationStation extends Module {
     val entry = entries(i)
 
     val addrHit  = io.in.bypass.map(bp => bp.valid && bp.phyDest === entry.phyAddrBase).reduce(_ || _)
-    val dataHit  = io.in.bypass.map(bp => bp.valid && bp.phyDest === entry.phyStoreData).reduce(_ || _)
-    val pseudoHit = io.in.bypass.map(bp => bp.valid && bp.phyDest === entry.pseudoSrc).reduce(_ || _)
+    val dataOrPseudoHit = io.in.bypass.map(bp => bp.valid && bp.phyDest === entry.dataOrPseudoSrc).reduce(_ || _)
 
     // 地址寄存器前馈（load/store）
     when(!entry.addrReady && addrHit) {
       entries(i).addrReady := true.B
     }
 
-    // 数据寄存器前馈（store）
-    when(!entry.dataReady && !entry.isPseudoMov && dataHit) {
-      entries(i).dataReady := true.B
-    }
-
-    // pseudo mov 伪指令专属 dataReady
-    when(!entry.dataReady && entry.isPseudoMov && pseudoHit) {
+    // 数据寄存器前馈（store或伪mov）
+    when(!entry.dataReady && dataOrPseudoHit) {
       entries(i).dataReady := true.B
     }
   }

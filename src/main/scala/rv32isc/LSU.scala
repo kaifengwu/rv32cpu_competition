@@ -117,8 +117,8 @@ class LSU extends Module {
         when(isPseudoMov) {
           // === 处理伪mov指令 ===
           // 从旁路获取源数据
-          val pseudoData = Mux(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.pseudoSrc).reduce(_ || _),
-                              Mux1H(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.pseudoSrc),
+          val pseudoData = Mux(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.dataOrPseudoSrc).reduce(_ || _),
+                              Mux1H(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.dataOrPseudoSrc),
                                    io.bypassIn.map(_.data)),
                               0.U) // 正常情况下应该从寄存器文件读取
 
@@ -170,8 +170,8 @@ class LSU extends Module {
 
           // 尝试获取store的数据
           when(io.issue.bits.isStore) {
-            when(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.phyStoreData).reduce(_ || _)) {
-              storeData := Mux1H(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.phyStoreData),
+            when(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.dataOrPseudoSrc).reduce(_ || _)) {
+              storeData := Mux1H(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.dataOrPseudoSrc),
                                 io.bypassIn.map(_.data))
             }.otherwise {
               storeData := 0.U  // 正常应该从寄存器文件读取
