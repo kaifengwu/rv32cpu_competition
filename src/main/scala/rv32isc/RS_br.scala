@@ -26,6 +26,7 @@ class BrRS extends Module {
 
   val inputStall = enqCount >= spaceLeft
 
+  io.out.isFull := inputStall || io.in.rollback.valid
   for (i <- 0 until ISSUE_WIDTH) {
     when(!inputStall){
       realEnq(i) := enqVec(i).valid && (i.U < spaceLeft)

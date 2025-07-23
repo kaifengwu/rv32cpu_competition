@@ -26,17 +26,25 @@ class ControlBundleIO extends Bundle{
         val isJalr = Bool()
         val isRet = Bool()
         val isJump = Bool()
+
+
+        val wrongPredict = Bool()
+        val redirectTarget = UInt(ADDR_WIDTH.W)
+        val predictTarget = UInt(ADDR_WIDTH.W)
+        val pc = UInt(ADDR_WIDTH.W)
+        val tailPtr = UInt(log2Ceil(FREELIST_SIZE).W)
+        val robIdx = UInt(ROB_IDX_WIDTH.W) // 分支指令在ROB中的索引
      }))
      val waitRet = Input(Bool())
      val robFull = Input(Bool())
      //flush用
      val rollBack = Input(ValidIO(new RollbackSignal))
-     val reture = Input(ValidIO(UInt(ADDR_WIDTH.W)))
+     val predictedRet = Input(ValidIO(UInt(ADDR_WIDTH.W)))                   // RAS预测出的 ret 跳转目标（ValidIO）
   }
   val out = new Bundle {
-    val redirect = Output(ValidIO(UInt(ADDR_WIDTH.W))) // 来自EX分支重定向
-    val retTarget = Output(ValidIO(UInt(ADDR_WIDTH.W))) // 来自EX分支重定向
     val rollbackPc      = Output(ValidIO(UInt(ADDR_WIDTH.W))) // 分支失败时恢复状态
+    val rollbackTail = Input(ValidIO(UInt(log2Ceil(FREELIST_SIZE).W))) // 回滚目标指针
+    val rollBackIdx = Output(ValidIO(UInt(ROB_IDX_WIDTH.W))) // 回滚目标指令索引
 
     val stall = new Bundle{
       val stall_IF = Output(Bool())
@@ -48,6 +56,10 @@ class ControlBundleIO extends Bundle{
       val flush_ID = Output(Bool())
       val flush_RE = Output(Bool())
     }
-
+ 
+    val retcommit = Output(ValidIO(Bool())) //BU返回给RAS
+    val redirect = Output(ValidIO(UInt(ADDR_WIDTH.W))) // 来自EX分支重定向
+    val retTarget = Output(ValidIO(UInt(ADDR_WIDTH.W))) // 来自EX分支重定向
+    val update = Output(ValidIO(new PredictorUpdateBundle)) //分支预测器更新
   }
 }

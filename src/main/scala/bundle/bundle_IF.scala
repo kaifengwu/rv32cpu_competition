@@ -45,7 +45,7 @@ class IFStageIO extends Bundle {
     val toDecode = Output(Vec(FETCH_WIDTH, new IFBundle))
   }
 }
-
+  
 class IFBundle extends Bundle {
   val pc         = UInt(ADDR_WIDTH.W)
   val inst       = UInt(INST_WIDTH.W)
@@ -59,4 +59,6 @@ class PredictorUpdateBundle extends Bundle {
   val taken   = Bool()//预测为跳转
   val target  = UInt(ADDR_WIDTH.W)
 }
+
+
 

@@ -59,6 +59,7 @@ class RenameStage extends Module {
     renamed.phyRs2    := rat.io.out.phyRs2(i)
 
     renamed.robIdx    := io.in.robIdx(i)
+    renamed.isBubble := io.in.idVec(i).isBubble
 
 
     //给rob分配器的信号
