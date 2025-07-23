@@ -132,6 +132,10 @@ class LSU extends Module {
   io.pseudoOut.bits.data := 0.U
   io.pseudoOut.bits.robIdx := 0.U
 
+  // ROB写回接口初始化
+  io.robWriteback.valid := false.B
+  io.robWriteback.bits.robIdx := 0.U
+
   // 外设接口默认值
   io.perip_addr := 0.U
   io.perip_ren := false.B

@@ -16,6 +16,9 @@ class MovUnitIO extends Bundle {
   // 结果输出接口
   val resultOut = ValidIO(new BypassBus)                       // 最终结果输出改为ValidIO
 
+  // ROB写回接口
+  val robWriteback = ValidIO(new RobWritebackEntry)            // 添加专门的ROB写回接口
+
   // 忙信号
   val busy = Output(Bool())
 }

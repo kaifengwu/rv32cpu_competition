@@ -54,6 +54,10 @@ class MovUnit extends Module {
   io.bypassBus.reg.robIdx := resultRobIdx
   io.bypassBus.data := resultData
 
+  // ROB写回接口
+  io.robWriteback.valid := resultValid
+  io.robWriteback.bits.robIdx := resultRobIdx
+
   // 默认不忙，可以接收指令
   io.issue.ready := true.B  // 总是可以接收指令
   io.busy := io.issue.valid
