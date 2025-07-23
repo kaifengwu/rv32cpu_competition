@@ -44,51 +44,51 @@ class LSUAddressUnit extends Module {
   io.out.canAccess := isValidAddress(computedAddr, io.in.isStore) && maskValid
 }
 
-// 优化的LSU主模块，支持StoreQueue和伪指令处理
+
 class LSU extends Module {
-  val io = IO(new LSUWithStoreQueueIO)  // 使用合并后的接口
+  val io = IO(new LSUWithStoreQueueIO)
 
-  // 简化为两状态状态机
-  val sIdle :: sExec :: Nil = Enum(2)
-  val state = RegInit(sIdle)
+  //-------------------------------------
+  // 流水线寄存器（仿RS_lsu_Reg设计）
+  //-------------------------------------
+  class LSUPipelineReg extends Bundle {
+    val entry = new LsuIssueEntry
+    val addrResult = UInt(DATA_WIDTH.W)
+    val storeData = UInt(DATA_WIDTH.W)
+    val accessMask = UInt(2.W)
+    val canAccess = Bool()
+  }
 
-  // 寄存器定义
-  val issueEntryReg = Reg(new LsuIssueEntry)        // 保存当前处理的指令
-  val addrResult = Reg(UInt(DATA_WIDTH.W))          // 地址计算结果
-  val storeData = Reg(UInt(DATA_WIDTH.W))           // 存储数据值(不是物理寄存器号)
+  val reg_valid = RegInit(false.B)
+  val reg_data = RegInit(0.U.asTypeOf(new LSUPipelineReg))
+  val reg_rollback = RegInit(false.B)  // 回滚状态寄存器
 
-  // 添加回滚范围检查逻辑
-  val inRollbackRange = WireDefault(false.B)
+  // 回滚范围判断（复用原逻辑）
+  val inRollbackRange = Wire(Bool())
   when(io.rollback.valid) {
     val rollbackIdx = io.rollback.bits
     val tailIdx = io.tail
     when(tailIdx >= rollbackIdx) {
-      // 普通情况：[rollback, tail)
-      inRollbackRange := issueEntryReg.robIdx >= rollbackIdx && issueEntryReg.robIdx < tailIdx
+      inRollbackRange := reg_data.entry.robIdx >= rollbackIdx && reg_data.entry.robIdx < tailIdx
     }.otherwise {
-      // 环形情况：tail < rollback
-      inRollbackRange := (issueEntryReg.robIdx >= rollbackIdx) || (issueEntryReg.robIdx < tailIdx)
+      inRollbackRange := (reg_data.entry.robIdx >= rollbackIdx) || (reg_data.entry.robIdx < tailIdx)
     }
+  }.otherwise {
+    inRollbackRange := false.B
   }
 
-  // 创建全局StoreQueue实例
-  val globalStoreQueue = Module(new StoreQueue)
+  // 流水线控制信号
+  val stall = Wire(Bool())
+  val flush = inRollbackRange || io.rollback.valid  // 回滚触发冲刷
 
-  // 使用MemWithStoreQueue替代直接使用MemoryAccessUnit
+  //-------------------------------------
+  // 子模块实例化
+  //-------------------------------------
+  val addrUnit = Module(new LSUAddressUnit)
+  val globalStoreQueue = Module(new StoreQueue)
   val memWithStoreQueue = Module(new MemWithStoreQueue)
-  
-  // 连接普通访存接口
-  memWithStoreQueue.io.mem.in.addr := addrResult
-  memWithStoreQueue.io.mem.in.ren := state === sExec && issueEntryReg.isLoad
-  memWithStoreQueue.io.mem.in.wen := state === sExec && issueEntryReg.isStore
-  memWithStoreQueue.io.mem.in.mask := addrUnit.io.out.accessMask
-  memWithStoreQueue.io.mem.in.wdata := storeData
-  memWithStoreQueue.io.mem.in.rdata := io.perip_rdata
-  memWithStoreQueue.io.mem.in.funct3 := issueEntryReg.func3
-  memWithStoreQueue.io.mem.in.fromStoreQueue := false.B
-  memWithStoreQueue.io.mem.in.robIdx := issueEntryReg.robIdx
-  
-  // 连接外设接口到顶层
+
+  // 连接外设接口到顶层（保持不变）
   io.perip_addr := memWithStoreQueue.io.perip_addr
   io.perip_ren := memWithStoreQueue.io.perip_ren
   io.perip_wen := memWithStoreQueue.io.perip_wen
@@ -96,254 +96,193 @@ class LSU extends Module {
   io.perip_wdata := memWithStoreQueue.io.perip_wdata
   memWithStoreQueue.io.perip_rdata := io.perip_rdata
 
-  // 初始化StoreQueue接口
-  memWithStoreQueue.io.storeQueue.commitValid := false.B
-  memWithStoreQueue.io.storeQueue.commitEntry := DontCare
-
-  // 初始化全局StoreQueue接口
-  // globalStoreQueue.io.in.rollback := io.rollback.valid
-  // globalStoreQueue.io.in.rollbackTarget := io.rollback.bits
-  globalStoreQueue.io.in.rollback := io.rollback
-  globalStoreQueue.io.in.enq.valid := false.B
-  globalStoreQueue.io.in.enq.bits := DontCare
-  globalStoreQueue.io.in.bypassAddr.valid := false.B
-  globalStoreQueue.io.in.bypassAddr.bits := 0.U
+  //-------------------------------------
+  // 地址计算阶段
+  //-------------------------------------
+  // 旁路选择逻辑（保持原功能）
+  val rs1Bypass = Mux1H(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyAddrBaseDest), 
+                        io.bypassIn.map(_.data))
   
-  // 地址计算单元
-  val addrUnit = Module(new LSUAddressUnit)
-  addrUnit.io.in.rs1_data := Mux(state === sIdle,
-                               // 如果是新指令，尝试从旁路获取最新值
-                               Mux(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyAddrBaseDest).reduce(_ || _),
-                                   Mux1H(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyAddrBaseDest),
-                                         io.bypassIn.map(_.data)),
-                                   0.U),  // 正常应该从寄存器文件读取
-                               // 使用已保存的地址基值
-                               addrResult)
-  addrUnit.io.in.imm := Mux(state === sIdle, io.issue.bits.imm, issueEntryReg.imm)
-  addrUnit.io.in.funct3 := Mux(state === sIdle, io.issue.bits.func3, issueEntryReg.func3)
-  addrUnit.io.in.isLoad := Mux(state === sIdle, io.issue.bits.isLoad, issueEntryReg.isLoad)
-  addrUnit.io.in.isStore := Mux(state === sIdle, io.issue.bits.isStore, issueEntryReg.isStore)
+  addrUnit.io.in.rs1_data := Mux(io.issue.valid, rs1Bypass, 0.U)
+  addrUnit.io.in.imm := io.issue.bits.imm
+  addrUnit.io.in.funct3 := io.issue.bits.func3
+  addrUnit.io.in.isLoad := io.issue.bits.isLoad
+  addrUnit.io.in.isStore := io.issue.bits.isStore
 
-  // 默认初始化输出
-  io.issue.ready := state === sIdle
+  // 地址旁路输出（保持原接口）
+  io.bypassOut.valid := io.issue.valid && addrUnit.io.out.valid
+  io.bypassOut.reg.phyDest := io.issue.bits.phyAddrBaseDest
+  io.bypassOut.reg.robIdx := io.issue.bits.robIdx
+  io.bypassOut.data := addrUnit.io.out.addr
 
-  // 旁路输出初始化
-  io.bypassOut.valid := false.B
-  io.bypassOut.reg.phyDest := 0.U
-  io.bypassOut.reg.robIdx := 0.U
-  io.bypassOut.data := 0.U
+  // 伪指令处理（单周期完成）
+  io.pseudoOut.valid := io.issue.valid && io.issue.bits.isMov
+  io.pseudoOut.bits.reg.phyDest := io.issue.bits.phyRd
+  io.pseudoOut.bits.reg.robIdx := io.issue.bits.robIdx
+  io.pseudoOut.bits.data := MuxLookup(io.issue.bits.func3, rs1Bypass, Seq(
+    F3_LB  -> Cat(Fill(24, rs1Bypass(7)), rs1Bypass(7, 0)),
+    F3_LBU -> Cat(0.U(24.W), rs1Bypass(7, 0)),
+    F3_LH  -> Cat(Fill(16, rs1Bypass(15)), rs1Bypass(15, 0)),
+    F3_LHU -> Cat(0.U(16.W), rs1Bypass(15, 0))
+  ))
 
-  // 普通结果输出初始化
-  io.resultOut.valid := false.B
-  io.resultOut.bits.reg.phyDest := 0.U
-  io.resultOut.bits.data := 0.U
-  io.resultOut.bits.reg.robIdx := 0.U
+  //-------------------------------------
+  // 流水寄存器更新逻辑
+  //-------------------------------------
+  io.issue.ready := !reg_valid || !stall  // 反压控制
 
-  // 伪指令输出端口初始化
-  io.pseudoOut.valid := false.B
-  io.pseudoOut.bits.reg.phyDest := 0.U
-  io.pseudoOut.bits.data := 0.U
-  io.pseudoOut.bits.reg.robIdx := 0.U
-
-  // 写回旁路总线初始化
-  io.writebackBus.valid := false.B
-  io.writebackBus.reg.phyDest := 0.U
-  io.writebackBus.reg.robIdx := 0.U
-  io.writebackBus.data := 0.U
-
-  // 外设接口默认值
-  io.perip_addr := 0.U
-  io.perip_ren := false.B
-  io.perip_wen := false.B
-  io.perip_mask := 0.U
-  io.perip_wdata := 0.U
-
-  // 忙状态信号
-  io.busy := state === sExec
-
-  // 状态转换和数据处理
-  switch(state) {
-    is(sIdle) {
-      when(io.issue.valid) {
-        val isMov = io.issue.bits.isMov
-
-        when(isMov) {
-          // === 处理伪mov指令 ===
-          // 从旁路获取源数据
-          val pseudoData = Mux(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyStoreDataDest).reduce(_ || _),
-                              Mux1H(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyStoreDataDest),
-                                   io.bypassIn.map(_.data)),
-                              0.U) // 正常情况下应该从寄存器文件读取
-
-          // 掩码计算逻辑 - 根据func3进行掩码处理
-          val maskedData = WireDefault(pseudoData)
-          switch(io.issue.bits.func3) {
-            // 字节操作 (LB/LBU/SB)
-            is(F3_LB) { 
-              // 有符号扩展
-              val byteData = pseudoData(7, 0)
-              maskedData := Cat(Fill(24, byteData(7)), byteData)
-            }
-            is(F3_LBU) { 
-              // 无符号扩展
-              val byteData = pseudoData(7, 0)
-              maskedData := Cat(0.U(24.W), byteData)
-            }
-            // 半字操作 (LH/LHU/SH)
-            is(F3_LH) { 
-              // 有符号扩展
-              val halfwordData = pseudoData(15, 0)
-              maskedData := Cat(Fill(16, halfwordData(15)), halfwordData)
-            }
-            is(F3_LHU) { 
-              // 无符号扩展
-              val halfwordData = pseudoData(15, 0)
-              maskedData := Cat(0.U(16.W), halfwordData)
-            }
-            // 字操作 (LW/SW) - 默认情况
-            is(F3_LW) { 
-              maskedData := pseudoData
-            }
-          }
-
-          // 直接输出伪mov结果
-          io.pseudoOut.valid := true.B
-          io.pseudoOut.bits.reg.phyDest := io.issue.bits.phyRd
-          io.pseudoOut.bits.data := maskedData
-          io.pseudoOut.bits.reg.robIdx := io.issue.bits.robIdx
-
-          // 保持idle状态，无需进入执行状态
-          state := sIdle
-
-        }.otherwise {
-          // === 处理普通load/store指令 ===
-          // 保存当前指令到寄存器
-          issueEntryReg := io.issue.bits
-
-          // 尝试获取store的数据
-          when(io.issue.bits.isStore) {
-            when(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyStoreDataDest).reduce(_ || _)) {
-              storeData := Mux1H(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyStoreDataDest),
-                                io.bypassIn.map(_.data))
-            }.otherwise {
-              storeData := 0.U  // 正常应该从寄存器文件读取
-            }
-          }
-
-          // 如果地址计算有效且没有外设访问，进行旁路
-          when(addrUnit.io.out.valid && addrUnit.io.out.canAccess) {
-            // 保存地址计算结果
-            addrResult := addrUnit.io.out.addr
-
-            // 发送地址计算结果到旁路总线
-            io.bypassOut.valid := true.B
-            io.bypassOut.reg.phyDest := io.issue.bits.phyAddrBaseDest
-            io.bypassOut.reg.robIdx := io.issue.bits.robIdx
-            io.bypassOut.data := addrUnit.io.out.addr
-
-            // 添加回滚检查 - 如果指令在回滚范围内，不进入执行状态
-            when(!inRollbackRange) {
-              // 如果是外设访问或需要进一步处理，转入执行状态
-              state := sExec
-            }
-          }.otherwise {
-            // 无效地址，发送错误
-            // 这里可以添加异常处理
-
-            state := sIdle
-          }
-        }
-      }
-    }
-
-    is(sExec) {
-      // 如果检测到回滚且当前指令在回滚范围内，放弃执行
-      when(inRollbackRange) {
-        state := sIdle
-      }.otherwise {
-        // 处理load/store指令
-        when(issueEntryReg.isLoad) {
-          // === Load指令处理 ===
-
-          // 首先查询StoreQueue是否有匹配地址的数据
-          globalStoreQueue.io.in.bypassAddr.valid := true.B
-          globalStoreQueue.io.in.bypassAddr.bits := addrResult
-
-          // 当StoreQueue命中时，使用StoreQueue中的数据
-          val useStoreQueueData = globalStoreQueue.io.out.bypass.hit
-          val storeQueueData = globalStoreQueue.io.out.bypass.data
-          // 处理外设读取
-          when(addrResult >= 0x80200000.U && addrResult < 0x80200100.U) {
-            // 外设读取，但仍然优先使用StoreQueue的数据
-            memWithStoreQueue.io.mem.in.ren := !useStoreQueueData  // 只有当StoreQueue未命中时才读取内存
-            memWithStoreQueue.io.mem.in.rdata := io.perip_rdata  // 外设数据
-            
-            // 设置结果
-            io.resultOut.valid := true.B
-            io.resultOut.bits.reg.phyDest := issueEntryReg.phyRd
-            io.resultOut.bits.data := Mux(useStoreQueueData, storeQueueData, memWithStoreQueue.io.mem.out.rdata)
-            io.resultOut.bits.reg.robIdx := issueEntryReg.robIdx
-            
-            // 设置写回旁路
-            io.writebackBus.valid := true.B
-            io.writebackBus.reg.phyDest := issueEntryReg.phyRd
-            io.writebackBus.reg.robIdx := issueEntryReg.robIdx
-            io.writebackBus.data := Mux(useStoreQueueData, storeQueueData, memWithStoreQueue.io.mem.out.rdata)
-
-            state := sIdle
-          }.otherwise {
-            // 内存读取 - 假设通过同一接口但访问不同地址空间
-            memWithStoreQueue.io.mem.in.ren := !useStoreQueueData  // 只有当StoreQueue未命中时才读取内存
-            // 这里应该连接到内存接口，但当前似乎复用了外设接口
-            // 在实际系统中需要修改
-            
-            // 设置结果
-            io.resultOut.valid := true.B
-            io.resultOut.bits.reg.phyDest := issueEntryReg.phyRd
-            io.resultOut.bits.data := Mux(useStoreQueueData, storeQueueData, memWithStoreQueue.io.mem.out.rdata)
-            io.resultOut.bits.reg.robIdx := issueEntryReg.robIdx
-            
-            // 设置写回旁路
-            io.writebackBus.valid := true.B
-            io.writebackBus.reg.phyDest := issueEntryReg.phyRd
-            io.writebackBus.reg.robIdx := issueEntryReg.robIdx
-            io.writebackBus.data := Mux(useStoreQueueData, storeQueueData, memWithStoreQueue.io.mem.out.rdata)
-
-            state := sIdle
-          }
-        }.elsewhen(issueEntryReg.isStore) {
-          // === Store指令处理 ===
-          // 注意：此处仍需要使用StoreQueue，因为MemWithStoreQueue只处理提交的存储
-          
-          // 使用MemWithStoreQueue的StoreQueue接口
-          // 注意：这里不使用MemWithStoreQueue的StoreQueue接口
-          // 因为我们仍需要先将Store指令加入队列，而MemWithStoreQueue负责从队列提交
-        
-          
-          // 回滚信号连接
-          // globalStoreQueue.io.in.rollback := io.rollback.valid
-          // globalStoreQueue.io.in.rollbackTarget := io.rollback.bits
-          globalStoreQueue.io.in.rollback := io.rollback
-          
-          // 添加到StoreQueue
-          globalStoreQueue.io.in.enq.valid := true.B
-          globalStoreQueue.io.in.enq.bits.robIdx := issueEntryReg.robIdx
-          globalStoreQueue.io.in.enq.bits.addr := addrResult
-          globalStoreQueue.io.in.enq.bits.data := storeData
-
-          // 因为 enq 是 ValidIO，没有 ready 信号，我们假设它总能接收
-          // 所以在将数据送入队列的同一周期，就可以认为执行完成
-
-          // 设置结果
-          io.resultOut.valid := true.B
-          io.resultOut.bits.reg.phyDest := 0.U  // store不需要写回
-          io.resultOut.bits.data := 0.U
-          io.resultOut.bits.reg.robIdx := issueEntryReg.robIdx
-
-          // 完成后回到空闲状态
-          state := sIdle
-        }
-      }
+  when (flush) {
+    reg_valid := false.B
+  }.elsewhen (!stall) {
+    reg_valid := io.issue.valid && !io.issue.bits.isMov  // 伪指令不进入流水线
+    reg_data.entry := io.issue.bits
+    reg_data.addrResult := addrUnit.io.out.addr
+    reg_data.accessMask := addrUnit.io.out.accessMask
+    reg_data.canAccess := addrUnit.io.out.canAccess
+    
+    // 存储数据旁路选择
+    when(io.issue.bits.isStore) {
+      reg_data.storeData := Mux1H(io.bypassIn.map(bp => 
+        bp.valid && bp.reg.phyDest === io.issue.bits.phyStoreDataDest
+      ), io.bypassIn.map(_.data))
     }
   }
+
+  //-------------------------------------
+  // 访存执行阶段
+  //-------------------------------------
+  // StoreQueue接口
+  globalStoreQueue.io.in.rollback := io.rollback
+  globalStoreQueue.io.in.enq.valid := reg_valid && reg_data.entry.isStore
+  globalStoreQueue.io.in.enq.bits.robIdx := reg_data.entry.robIdx
+  globalStoreQueue.io.in.enq.bits.addr := reg_data.addrResult
+  globalStoreQueue.io.in.enq.bits.data := reg_data.storeData
+  globalStoreQueue.io.in.bypassAddr.valid := reg_valid && reg_data.entry.isLoad
+  globalStoreQueue.io.in.bypassAddr.bits := reg_data.addrResult
+
+  // 访存单元连接
+  memWithStoreQueue.io.mem.in.addr := reg_data.addrResult
+  memWithStoreQueue.io.mem.in.ren := reg_valid && reg_data.entry.isLoad
+  memWithStoreQueue.io.mem.in.wen := false.B  // Store通过StoreQueue提交
+  memWithStoreQueue.io.mem.in.mask := reg_data.accessMask
+  memWithStoreQueue.io.mem.in.wdata := reg_data.storeData
+  memWithStoreQueue.io.mem.in.funct3 := reg_data.entry.func3
+  memWithStoreQueue.io.mem.in.fromStoreQueue := false.B
+  memWithStoreQueue.io.mem.in.robIdx := reg_data.entry.robIdx
+
+  // 结果输出逻辑
+  val loadResult = Mux(globalStoreQueue.io.out.bypass.hit,
+                      globalStoreQueue.io.out.bypass.data,
+                      memWithStoreQueue.io.mem.out.rdata)
+  
+  io.resultOut.valid := reg_valid && (reg_data.entry.isLoad || reg_data.entry.isStore)
+  io.resultOut.bits.reg.phyDest := Mux(reg_data.entry.isLoad, reg_data.entry.phyRd, 0.U)
+  io.resultOut.bits.data := Mux(reg_data.entry.isLoad, loadResult, 0.U)
+  io.resultOut.bits.reg.robIdx := reg_data.entry.robIdx
+
+  // 写回旁路总线
+  io.writebackBus.valid := reg_valid && reg_data.entry.isLoad
+  io.writebackBus.reg.phyDest := reg_data.entry.phyRd
+  io.writebackBus.reg.robIdx := reg_data.entry.robIdx
+  io.writebackBus.data := loadResult
+
+  // 忙状态信号
+  io.busy := reg_valid
+}
+
+class LSU_Top extends Module {
+  val io = IO(new Bundle {
+    // 从保留站接收指令
+    val issue = Flipped(Decoupled(new LsuIssueEntry))
+
+    // 旁路总线接口
+    val bypassIn = Input(Vec(NUM_BYPASS_PORTS, new BypassBus))   // 接收前馈数据
+    val bypassOut = Output(new BypassBus)                        // 输出地址计算结果
+
+    // 结果输出接口
+    val resultOut = ValidIO(new BypassBus)                     // 最终结果输出
+    val pseudoOut = ValidIO(new BypassBus)                     // 伪指令结果输出
+
+    // 写回旁路接口
+    val writebackBus = Output(new WritebackBus)                // 添加专门的写回旁路总线
+
+    // 外设直连接口
+    val perip_addr = Output(UInt(32.W))
+    val perip_ren = Output(Bool())
+    val perip_wen = Output(Bool())
+    val perip_mask = Output(UInt(2.W))
+    val perip_wdata = Output(UInt(32.W))
+    val perip_rdata = Input(UInt(32.W))
+
+    // 回滚信号
+    val rollback = Input(Valid(UInt(ROB_IDX_WIDTH.W)))
+    val tail = Input(UInt(ROB_IDX_WIDTH.W))
+
+    val busy = Output(Bool())                                  // LSU忙信号
+  })
+
+  // 实例化RS_lsu_Reg，负责从保留站接收指令
+  val rs_lsu_reg = Module(new RS_lsu_Reg)
+
+  // 实例化LSU核心执行单元
+  val lsu_core = Module(new LSU)
+
+  // 实例化lsu_Next_Reg，负责将执行结果输出
+  val lsu_next_reg = Module(new LSU_Next_Reg)
+
+  // 回滚相关信号处理
+  val rollbackEntry = Wire(new RsRollbackEntry)
+  rollbackEntry.rollbackIdx := io.rollback.bits
+  rollbackEntry.tailIdx := io.tail
+
+  // ========= RS_lsu_Reg连接 =========
+  // 输入连接
+  rs_lsu_reg.io.in <> io.issue
+  rs_lsu_reg.io.stall := false.B  // 这里可以根据实际需求调整
+  rs_lsu_reg.io.flush := false.B  // 这里可以根据实际需求调整
+  rs_lsu_reg.io.rollback.valid := io.rollback.valid
+  rs_lsu_reg.io.rollback.bits := rollbackEntry
+
+  // ========= LSU核心单元连接 =========
+  // LSU输入连接
+  lsu_core.io.issue <> rs_lsu_reg.io.out
+  lsu_core.io.bypassIn := io.bypassIn
+  lsu_core.io.rollback := io.rollback
+  lsu_core.io.tail := io.tail
+
+  // LSU外设接口连接
+  io.perip_addr := lsu_core.io.perip_addr
+  io.perip_ren := lsu_core.io.perip_ren
+  io.perip_wen := lsu_core.io.perip_wen
+  io.perip_mask := lsu_core.io.perip_mask
+  io.perip_wdata := lsu_core.io.perip_wdata
+  lsu_core.io.perip_rdata := io.perip_rdata
+
+  // ========= lsu_Next_Reg连接 =========
+  // lsu_Next_Reg输入连接
+  lsu_next_reg.io.in <> lsu_core.io.resultOut
+  lsu_next_reg.io.stall := false.B  // 这里可以根据实际需求调整
+  lsu_next_reg.io.flush := false.B  // 这里可以根据实际需求调整
+  lsu_next_reg.io.rollback.valid := io.rollback.valid
+  lsu_next_reg.io.rollback.bits := rollbackEntry
+
+  // ========= 输出连接 =========
+  // 第一周期组合逻辑结束后输出的Bypass旁路信号
+  io.bypassOut := lsu_core.io.bypassOut
+
+  // 伪指令结果直接输出，不经过lsu_Next_Reg
+  io.pseudoOut := lsu_core.io.pseudoOut
+
+  // 经过第二周期后输出的写回结果
+  io.resultOut := lsu_next_reg.io.out
+
+  // 第二周期访存结束后输出的WritebackBus写回旁路信号
+  // 从lsu_core的writebackBus获取数据，经过lsu_Next_Reg处理
+  io.writebackBus.valid := lsu_next_reg.io.rob_wb.valid
+  io.writebackBus.reg.phyDest := lsu_next_reg.io.out.reg.phyDest
+  io.writebackBus.reg.robIdx := lsu_next_reg.io.out.reg.robIdx
+  io.writebackBus.data := lsu_next_reg.io.out.data
+
+  // 忙状态信号 - LSU至少有一个阶段在处理指令时就是忙的
+  io.busy := rs_lsu_reg.io.out.valid || lsu_core.io.busy
 }

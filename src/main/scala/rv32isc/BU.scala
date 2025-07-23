@@ -5,6 +5,7 @@ import bundles._
 import config.Configs._
 import config.OoOParams._
 import config.InstructionConstants._
+//BU的顶层模块叫BU_Top,实例化的时候实例化这个
 
 // BU模块：处理分支、jal、jalr跳转逻辑，支持回滚和保留站接口
 class BU extends Module {
@@ -112,4 +113,62 @@ class BU extends Module {
 
   // 处理输入就绪信号 - 当BU不忙时，可以接收新指令
   io.in.ready := !busy
+}
+
+// BU顶层模块，整合RS_br_Reg、BU和BU_WB_Reg
+class BU_Top extends Module {
+  val io = IO(new Bundle {
+    // 从保留站接收指令
+    val in = Flipped(Decoupled(new BrIssueEntry))
+
+    // 写回接口
+    val rob_wb = Output(ValidIO(new RobWritebackEntry))
+
+    // 旁路和写回总线
+    val bypassBus = Output(new BypassBus)        // 组合逻辑阶段产生的旁路信号
+    val writebackBus = Output(new WritebackBus)  // 经过BU_WB_Reg后产生的写回信号
+    val jumpBus = Output(ValidIO(new BU_OUT))    // 带valid的jump指令输出
+
+    // 控制信号
+    val stall = Input(Bool())
+    val flush = Input(Bool())
+
+    // 回滚信号
+    val rollback = Input(Valid(new RsRollbackEntry))
+  })
+
+  // 实例化RS_br_Reg
+  val rs_br_reg = Module(new RS_br_Reg)
+  rs_br_reg.io.in <> io.in
+  rs_br_reg.io.stall := io.stall
+  rs_br_reg.io.flush := io.flush
+  rs_br_reg.io.rollback := io.rollback
+
+  // 实例化BU
+  val bu = Module(new BU)
+  bu.io.in <> rs_br_reg.io.out
+
+  // 实例化BU_WB_Reg
+  val bu_wb_reg = Module(new BU_WB_Reg)
+  bu_wb_reg.io.in <> bu.io.out
+  bu_wb_reg.io.stall := io.stall
+  bu_wb_reg.io.flush := io.flush
+  bu_wb_reg.io.rollback := io.rollback
+
+  // 连接写回接口
+   io.rob_wb <> bu_wb_reg.io.rob_wb
+
+  // 在BU组合逻辑阶段输出Bypass旁路信号
+  io.bypassBus := bu.io.bypassBus
+
+  // 输出带valid信号的jump指令（来自BU_WB_Reg）
+  io.jumpBus.valid := bu_wb_reg.io.rob_wb.valid
+  io.jumpBus.bits := bu_wb_reg.io.out
+
+  // 从BU_WB_Reg输出WritebackBus信号
+  // 使用rob_wb的valid信号作为writebackBus的valid信号
+  io.writebackBus.valid := bu_wb_reg.io.rob_wb.valid
+  io.writebackBus.reg.phyDest := bu_wb_reg.io.out.phyRd
+  io.writebackBus.reg.robIdx := bu_wb_reg.io.out.robIdx
+  io.writebackBus.data := bu_wb_reg.io.out.result
 }

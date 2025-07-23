@@ -97,3 +97,23 @@ class WritebackUnitIO extends Bundle {
   val in = Input(Vec(NUM_BYPASS_PORTS, new WritebackBus)) // 写回总线输入
   val out = Output(Vec(NUM_BYPASS_PORTS, new WritebackBus)) // 写回总线输出
 }
+
+// MovUnit的输出结构
+class MOV_OUT extends Bundle {
+  val result = UInt(DATA_WIDTH.W)   // 移动/掩码处理后的结果
+  val busy = Bool()                 // 是否忙碌,用于记分牌
+
+  // 添加写回物理寄存器相关信息
+  val phyRd = UInt(PHYS_REG_IDX_WIDTH.W)  // 目标物理寄存器编号
+  val robIdx = UInt(ROB_IDX_WIDTH.W)      // 对应ROB项目编号
+}
+
+// 为MovUnit添加的解耦设计接口
+class MovIO_Decoupled extends Bundle {
+  val issue = Flipped(Decoupled(new LsuIssueEntry))   // 使用LsuIssueEntry作为输入
+  val storeEntry = Input(new StoreEntry)              // 输入StoreEntry
+  val resultOut = ValidIO(new BypassBus)              // MovUnit运算结果
+  val writebackBus = Output(new WritebackBus)         // 添加专门的写回旁路总线
+  val busy = Output(Bool())                           // 忙信号
+  val mov_out = ValidIO(new MOV_OUT)                  // 添加MOV_OUT输出接口供写回寄存器使用
+}

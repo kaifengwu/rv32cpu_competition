@@ -8,6 +8,8 @@ import config.Configs._
 import config.InstructionConstants._
 import config.OoOParams._
 
+//alu的顶层模块名字叫ALU_Top,实例化的时候实例化这个
+
 class Alu extends Module {
   val io = IO(new ALUIO_Decoupled)
 
@@ -43,8 +45,8 @@ class Alu extends Module {
   io.out.bits.result := result
   io.out.bits.cmp := false.B
   io.out.bits.zero := result === 0.U
-  io.out.bits.busy := busy
   io.out.bits.phyRd := io.in.bits.phyRd  // 目标物理寄存器编号
+  io.out.bits.busy := busy
   io.out.bits.robIdx := io.in.bits.robIdx // 对应ROB项目编号
 
   // 旁路输出 - 在组合逻辑阶段直接输出
@@ -61,4 +63,57 @@ class Alu extends Module {
 
   // 处理输入就绪信号 - 当ALU不忙时，可以接收新指令
   io.in.ready := !busy
+}
+
+// ALU顶层模块，整合RS_alu_Reg、Alu和ALU_WB_Reg
+class ALU_Top extends Module {
+  val io = IO(new Bundle {
+    // 从保留站接收指令
+    val in = Flipped(Decoupled(new AluIssueEntry))
+
+    // 写回接口，这个不确定有没有必要。
+     val rob_wb = Output(ValidIO(new RobWritebackEntry))
+
+    // 旁路和写回总线
+    val bypassBus = Output(new BypassBus)
+    val writebackBus = Output(new WritebackBus)
+
+    // 控制信号
+    val stall = Input(Bool())
+    val flush = Input(Bool())
+
+    // 回滚信号
+    val rollback = Input(Valid(new RsRollbackEntry))
+  })
+
+  // 实例化RS_alu_Reg
+  val rs_alu_reg = Module(new RS_alu_Reg)
+  rs_alu_reg.io.in <> io.in
+  rs_alu_reg.io.stall := io.stall
+  rs_alu_reg.io.flush := io.flush
+  rs_alu_reg.io.rollback := io.rollback
+
+  // 实例化ALU
+  val alu = Module(new Alu)
+  alu.io.in <> rs_alu_reg.io.out
+
+  // 实例化ALU_WB_Reg
+  val alu_wb_reg = Module(new ALU_WB_Reg)
+  alu_wb_reg.io.in <> alu.io.out
+  alu_wb_reg.io.stall := io.stall
+  alu_wb_reg.io.flush := io.flush
+  alu_wb_reg.io.rollback := io.rollback
+
+  // 连接写回接口
+   io.rob_wb <> alu_wb_reg.io.rob_wb
+
+  // 在ALU组合逻辑阶段输出Bypass旁路信号
+  io.bypassBus := alu.io.bypassBus
+
+  // 从ALU_WB_Reg输出WritebackBus信号
+  // 使用rob_wb的valid信号作为writebackBus的valid信号，因为ALU_OUT没有valid字段
+  io.writebackBus.valid := alu_wb_reg.io.rob_wb.valid
+  io.writebackBus.reg.phyDest := alu_wb_reg.io.out.phyRd
+  io.writebackBus.reg.robIdx := alu_wb_reg.io.out.robIdx
+  io.writebackBus.data := alu_wb_reg.io.out.result
 }

@@ -1,34 +1,23 @@
 package rv32isc
-
 import chisel3._
 import chisel3.util._
 import bundles._
 import config.Configs._
 import config.OoOParams._
 
-// MovUnit到下一级的流水寄存器接口
-class Mov_Next_RegIO extends Bundle {
-  // 从MovUnit接收结果
-  val in = Flipped(ValidIO(new BypassBus))       // MovUnit执行结果
+class MOV_WB_Reg extends Module {
+  val io = IO(new Bundle {
+    val in = Flipped(ValidIO(new MOV_OUT))     // MovUnit阶段输出，使用ValidIO接口
+    val out = Output(new MOV_OUT)              // WB阶段输入
+    val rob_wb = Output(ValidIO(new RobWritebackEntry))  // 连接到ROB的写回接口
+    val stall = Input(Bool())                  // 阻塞信号
+    val flush = Input(Bool())                  // 外部冲刷信号
 
-  // 输出到下一级
-  val out = Output(new BypassBus)                // 直接输出结果
-  val rob_wb = Output(ValidIO(new RobWritebackEntry)) // 连接到ROB的写回接口
+    // 回滚相关信号 - 确保同步清空
+    val rollback = Input(Valid(new RsRollbackEntry)) // 回滚信号和回滚点
+  })
 
-  // 控制信号
-  val stall = Input(Bool())                           // 阻塞信号
-  val flush = Input(Bool())                           // 外部冲刷信号
-
-  // 回滚相关信号 - 确保同步清空
-  val rollback = Input(Valid(new RsRollbackEntry))    // 回滚信号和回滚点
-}
-
-// MovUnit到下一级的流水寄存器实现
-class Mov_Next_Reg extends Module {
-  val io = IO(new Mov_Next_RegIO)
-
-  // 寄存器状态
-  val reg = RegInit(0.U.asTypeOf(new BypassBus))
+  val reg = RegInit(0.U.asTypeOf(new MOV_OUT))
   val valid = RegInit(false.B)
 
   // 判断当前指令是否在回滚区间内 - 优化环形判断逻辑
@@ -38,10 +27,10 @@ class Mov_Next_Reg extends Module {
     val tailIdx = io.rollback.bits.tailIdx
     when(tailIdx >= rollbackIdx) {
       // 普通情况：[rollback, tail)
-      inRollbackRange := reg.reg.robIdx >= rollbackIdx && reg.reg.robIdx < tailIdx
+      inRollbackRange := reg.robIdx >= rollbackIdx && reg.robIdx < tailIdx
     }.otherwise {
       // 环形情况：tail < rollback
-      inRollbackRange := (reg.reg.robIdx >= rollbackIdx) || (reg.reg.robIdx < tailIdx)
+      inRollbackRange := (reg.robIdx >= rollbackIdx) || (reg.robIdx < tailIdx)
     }
   }
 
@@ -52,7 +41,7 @@ class Mov_Next_Reg extends Module {
   when(internal_flush) {
     // 在目标区域时，冲刷信号优先，清空寄存器状态
     valid := false.B
-    reg := 0.U.asTypeOf(new BypassBus)
+    reg := 0.U.asTypeOf(new MOV_OUT)
   }.elsewhen(io.rollback.valid && !inRollbackRange) {
     // 不在目标区域但有回滚信号时，保存数据并stall一个周期
     when(io.in.valid) {
@@ -70,7 +59,7 @@ class Mov_Next_Reg extends Module {
   // 输出连接
   io.out := reg
 
-  // ROB写回接口连接 - 使用ValidIO结构与ROB对接
+  // ROB写回接口连接
   io.rob_wb.valid := valid && !internal_flush
-  io.rob_wb.bits.robIdx := reg.reg.robIdx
+  io.rob_wb.bits.robIdx := reg.robIdx
 }
