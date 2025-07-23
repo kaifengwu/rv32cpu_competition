@@ -58,6 +58,7 @@ class ROBIO extends Bundle {
   val out = new Bundle {
     val commit_wb = Vec(MAX_COMMIT_WB, ValidIO(new RobCommitWbEntry))
     val commit_store = Vec(MAX_COMMIT_STORE, ValidIO(new RobCommitStoreEntry))
+    val commitCount = Output(ValidIO(UInt(ROB_IDX_WIDTH.W)))
     val tail = UInt(ROB_IDX_WIDTH.W)
     // flush 被移除
   }
@@ -67,10 +68,10 @@ class ROBIO extends Bundle {
 class RobIndexAllocatorIO extends Bundle {
   val in = new Bundle {
     val allocateValid = Input(Vec(ISSUE_WIDTH, Bool()))
-    val commitValid   = Input(Vec(MAX_COMMIT_WIDTH, Bool()))
+    val commitCount = Input(ValidIO(UInt(ROB_IDX_WIDTH.W)))
     val rollback      = Input(ValidIO(UInt(ROB_IDX_WIDTH.W)))
+    val stall = Input(Bool()) // 阶段停顿
   }
-
   val out = new Bundle {
     val allocateIdx = Output(Vec(ISSUE_WIDTH, UInt(ROB_IDX_WIDTH.W))) // 分配编号
     val isFull   = Output(Bool()) // ROB满

@@ -14,6 +14,7 @@ class BU extends Module {
   val phyRd = io.in.bits.phyRd
   val robIdx = io.in.bits.robIdx
   val valid = io.in.valid
+  val tailPtr = io.in.bits.tailPtr  // 提取回滚目标指针
 
   // 控制信号提取
   val isBranch = io.in.bits.isBranch
@@ -78,26 +79,30 @@ class BU extends Module {
     targetPredictionCorrect := predictedTarget === jumpTarget
   }
 
-  val outValid = valid // 输出有效信号
-  val busy = outValid && !io.out_ready // 有效输出但下游未采纳时为busy
+  val busy = valid // 输出有效时为busy
   val mispredict = actualTaken =/= predictedTaken
 
-  // 设置输出信号
-  io.out.cmp := cmp
-  io.out.result := jumpTarget
-  io.out.branch_actual_target := branch_actual_target
-  io.out.outValid := outValid
-  io.out.isBranch := isBranch
-  io.out.mispredict := mispredict
-  io.out.targetPredictionCorrect := targetPredictionCorrect
-  io.out.busy := busy
-  io.out.pc := pc // 统一使用原始指令PC
-  io.out.jal_pc4 := jal_pc4
-  io.out.robIdx := robIdx
-  io.out.isReturnOut := isReturn
+  // 设置输出信号 - 使用ValidIO接口
+  io.out.valid := valid
+  io.out.bits.cmp := cmp
+  io.out.bits.result := jumpTarget
+  io.out.bits.branch_actual_target := branch_actual_target
+  io.out.bits.isBranch := isBranch
+  io.out.bits.mispredict := mispredict
+  io.out.bits.targetPredictionCorrect := targetPredictionCorrect
+  io.out.bits.busy := busy
+  io.out.bits.pc := pc // 统一使用原始指令PC
+  io.out.bits.jal_pc4 := jal_pc4
+  io.out.bits.robIdx := robIdx
+  io.out.bits.isReturnOut := isReturn
+  io.out.bits.phyRd := phyRd
+  io.out.bits.tailPtr := tailPtr // 传递回滚目标指针
 
-  // 传递写回物理寄存器信息
-  io.out.phyRd := phyRd
+  // 旁路输出 - 在组合逻辑阶段直接输出
+  io.bypassBus.valid := valid
+  io.bypassBus.reg.phyDest := phyRd      // 写回的物理寄存器号
+  io.bypassBus.reg.robIdx := robIdx      // 来源的ROB项目编号
+  io.bypassBus.data := jumpTarget        // 对于分支和跳转指令，我们传递的是目标地址
 
   // 处理输入就绪信号 - 当BU不忙时，可以接收新指令
   io.in.ready := !busy

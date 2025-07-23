@@ -36,18 +36,22 @@ class Alu extends Module {
     // 不再处理分支、跳转、访存指令
   }
 
-  val busy = valid && !io.out_ready // 输出有效但下游未准备好时为busy
-  val outValid = valid // 输出有效信号
+  val busy = valid // 输出有效时为busy
 
-  io.out.result := result
-  io.out.cmp := false.B
-  io.out.zero := result === 0.U
-  io.out.outValid := outValid
-  io.out.busy := busy
+  // 将结果连接到输出
+  io.out.valid := valid
+  io.out.bits.result := result
+  io.out.bits.cmp := false.B
+  io.out.bits.zero := result === 0.U
+  io.out.bits.busy := busy
+  io.out.bits.phyRd := io.in.bits.phyRd  // 目标物理寄存器编号
+  io.out.bits.robIdx := io.in.bits.robIdx // 对应ROB项目编号
 
-  // 传递写回物理寄存器信息
-  io.out.phyRd := io.in.bits.phyRd  // 目标物理寄存器编号
-  io.out.robIdx := io.in.bits.robIdx // 对应ROB项目编号
+  // 旁路输出 - 在组合逻辑阶段直接输出
+  io.bypassBus.valid := valid
+  io.bypassBus.reg.phyDest := io.in.bits.phyRd
+  io.bypassBus.reg.robIdx := io.in.bits.robIdx
+  io.bypassBus.data := result
 
   // 处理输入就绪信号 - 当ALU不忙时，可以接收新指令
   io.in.ready := !busy

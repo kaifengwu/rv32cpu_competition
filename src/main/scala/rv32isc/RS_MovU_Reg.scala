@@ -14,7 +14,7 @@ class RS_MovU_RegIO extends Bundle {
   val flush = Input(Bool())                      // 流水线冲刷信号
 
   // 回滚相关信号
-  val rollback = Input(Valid(new RsRollbackEntry)) // 回滚信号和回滚点          // ROB尾指针
+  val rollback = Input(Valid(new RsRollbackEntry)) // 回滚信号和回滚点          
 }
 
 // MovUnit保留站到MovUnit执行单元的单指令流水寄存器实现

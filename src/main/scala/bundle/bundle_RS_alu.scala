@@ -32,7 +32,7 @@ class RsRollbackEntry extends Bundle {
 
 class AluRSIO extends Bundle {
   val in = new Bundle {
-    val enq    = Vec(ISSUE_WIDTH,ValidIO(new AluIssueEntry)) // 从 Dispatch 发射到 ALU RS
+    val enq    = Input(Vec(ISSUE_WIDTH,ValidIO(new AluIssueEntry)))// 从 Dispatch 发射到 ALU RS
     val bypass = Input(Vec(NUM_BYPASS_PORTS, new BypassBus)) // 前馈广播输入
     val rollback = Input(ValidIO(new RsRollbackEntry))
   }

@@ -9,10 +9,10 @@ import config.OoOParams._
 // LSU到下一级的流水寄存器接口
 class LSU_Next_RegIO extends Bundle {
   // 从LSU接收结果
-  val in = Flipped(ValidIO(new BypassBus))           // LSU执行结果
+  val in = Flipped(ValidIO(new LSU_OUT))            // LSU执行结果
 
   // 输出到下一级
-  val out = Output(new BypassBus)                    // 直接输出结果
+  val out = Output(new LSU_OUT)                     // 直接输出结果
   val rob_wb = Output(ValidIO(new RobWritebackEntry)) // 连接到ROB的写回接口
 
   // 控制信号
@@ -28,7 +28,7 @@ class LSU_Next_Reg extends Module {
   val io = IO(new LSU_Next_RegIO)
 
   // 寄存器状态
-  val reg = RegInit(0.U.asTypeOf(new BypassBus))
+  val reg = RegInit(0.U.asTypeOf(new LSU_OUT))
   val valid = RegInit(false.B)
 
   // 判断当前指令是否在回滚区间内 - 优化环形判断逻辑
@@ -52,7 +52,7 @@ class LSU_Next_Reg extends Module {
   when(internal_flush) {
     // 在目标区域时，冲刷信号优先，清空寄存器状态
     valid := false.B
-    reg := 0.U.asTypeOf(new BypassBus)
+    reg := 0.U.asTypeOf(new LSU_OUT)
   }.elsewhen(io.rollback.valid && !inRollbackRange) {
     // 不在目标区域但有回滚信号时，保存数据并stall一个周期
     when(io.in.valid) {

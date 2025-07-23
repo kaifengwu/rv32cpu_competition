@@ -6,12 +6,11 @@ import config.Configs._
 import config.OoOParams._
 
 class RenameBundle extends Bundle {
-  val valid = Bool()
-
   val phyRs1 = UInt(PHYS_REG_IDX_WIDTH.W)
   val phyRs2 = UInt(PHYS_REG_IDX_WIDTH.W)
   val phyRd = UInt(PHYS_REG_IDX_WIDTH.W)
   val oldPhyRd = UInt(PHYS_REG_IDX_WIDTH.W)
+  val pc  = UInt(ADDR_WIDTH.W) // 指令所在 PC
 
   val robIdx = UInt(ROB_IDX_WIDTH.W)
 
@@ -28,23 +27,28 @@ class RenameBundle extends Bundle {
 
   val useRs1 = Bool()
   val useRs2 = Bool()
+
   val isRet = Bool() // ★ 添加：是否是 ret 伪指令
+  val jumpTarget = UInt(ADDR_WIDTH.W)
+  val tailPtr = UInt(log2Ceil(FREELIST_SIZE).W) // 回滚目标指针
 }
 
 class RenameStageIO extends Bundle {
   val in = new Bundle {
     val idVec = Input(Vec(ISSUE_WIDTH, new IDBundle)) // 来自 ID 阶段的解码信息
-    val isRet = Input(Vec(ISSUE_WIDTH, Bool())) // 每条指令是否是 ret
-    val dealloc = Input(
-      Vec(MAX_COMMIT_WB, Flipped(ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
-    )
+    val dealloc = Input(Vec(MAX_COMMIT_WB, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
+
+    val rollbackTail = Input(ValidIO(UInt(log2Ceil(FREELIST_SIZE).W))) // 回滚目标指针
+    val rollbackPc = Input(ValidIO(UInt(ADDR_WIDTH.W))) // 回滚目标指针
+
+    val robIdx = Output(Vec(ISSUE_WIDTH, UInt(ROB_IDX_WIDTH.W))) // 分配编号
     val stall = Input(Bool())
     val flush = Input(Bool())
   }
 
   val out = new Bundle {
+    val allocateValid = Input(Vec(ISSUE_WIDTH, Bool())) // 分配RobIdx的有效性标志
     val renameVec = Output(Vec(ISSUE_WIDTH, new RenameBundle)) // 输出重命名结果
-    val isRet = Input(Vec(ISSUE_WIDTH, Bool())) // 每条指令是否是 ret
   }
 }
 
@@ -52,6 +56,7 @@ class RenameStageIO extends Bundle {
 class RATIO extends Bundle {
   val in = new Bundle {
     // 查表输入
+    val stall = Input(Bool()) // 阶段停顿
     val logicRs1 = Input(Vec(ISSUE_WIDTH, UInt(ARCH_REG_IDX_WIDTH.W)))
     val logicRs2 = Input(Vec(ISSUE_WIDTH, UInt(ARCH_REG_IDX_WIDTH.W)))
 
@@ -81,14 +86,14 @@ class RATIO extends Bundle {
 class FreeListIO extends Bundle {
   val in = new Bundle {
     val allocate = Input(Vec(ISSUE_WIDTH, Bool()))
-    val dealloc  = Input(Vec(MAX_COMMIT_WB, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
-    val flush    = Input(Bool()) // 分支回滚
-    val snapshotTail = Input(UInt(log2Ceil(FREELIST_SIZE).W)) // 回滚目标指针
+    val dealloc  = Input(Vec(MAX_COMMIT_WB, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))// 释放物理寄存器
+    val rollbackTail = Input(ValidIO(UInt(log2Ceil(FREELIST_SIZE).W))) // 回滚目标指针
+    val stall = Input(Bool()) // 阶段停顿
   }
 
   val out = new Bundle {
     val phyRd = Output(Vec(ISSUE_WIDTH, UInt(PHYS_REG_IDX_WIDTH.W)))
-    val headPtr = Output(UInt(log2Ceil(FREELIST_SIZE).W)) // 当前栈顶指针
+    val tailPtr = Output(UInt(log2Ceil(FREELIST_SIZE).W)) // 当前栈顶指针
   }
 }
 
@@ -97,11 +102,9 @@ class RenameDispatchRegIO extends Bundle {
     val renameVec = Input(new RenameBundle)
     val stall = Input(Bool())
     val flush = Input(Bool())
-    val isRet = Bool() // ★ 添加：是否是 ret 伪指令
   }
 
   val out = new Bundle {
     val renameVec = Output(new RenameBundle)
-    val isRet = Bool() // ★ 添加：是否是 ret 伪指令
   }
 }

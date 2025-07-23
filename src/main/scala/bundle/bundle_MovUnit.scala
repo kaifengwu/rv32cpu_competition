@@ -14,7 +14,7 @@ class MovUnitIO extends Bundle {
   val bypassIn = Input(Vec(NUM_BYPASS_PORTS, new BypassBus))   // 接收前馈数据
 
   // 结果输出接口
-  val resultOut = Decoupled(new BypassBus)                     // 最终结果输出
+  val resultOut = ValidIO(new BypassBus)                       // 最终结果输出改为ValidIO
 
   // 忙信号
   val busy = Output(Bool())

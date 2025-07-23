@@ -20,6 +20,5 @@ class IF_ID_Reg extends Module {
   }.elsewhen(!io.stall) {
     reg := io.in
   }
-
   io.out := reg
 }

@@ -24,11 +24,11 @@ class LsuRS extends Module {
   val enqCount = PopCount(enqVec.map(_.valid))
 
 // === 入队执行 ===
-val inputStall = enqCount > spaceLeft
+  val inputStall = enqCount > spaceLeft
   val realEnq = Wire(Vec(ISSUE_WIDTH, Bool()))
 
   for (i <- 0 until ISSUE_WIDTH) {
-    when(!inputStall){
+    when(!inputStall && !io.in.rollback.valid){
       realEnq(i) := enqVec(i).valid && (i.U < spaceLeft)
     }
   }
@@ -71,36 +71,36 @@ val inputStall = enqCount > spaceLeft
       }
 
 
-    val matchIdxReversed = PriorityEncoder(checkVec.reverse)
-    val matchIdx = (checkVec.length - 1).U - matchIdxReversed
-    val matched = checkVec.asUInt.orR
+      val matchIdxReversed = PriorityEncoder(checkVec.reverse)
+      val matchIdx = (checkVec.length - 1).U - matchIdxReversed
+      val matched = checkVec.asUInt.orR
 
-    when(entry.isLoad && matched) {
-      val storeEntry = WireDefault(0.U.asTypeOf(new LsuIssueEntry))
+      when(entry.isLoad && matched) {
+        val storeEntry = WireDefault(0.U.asTypeOf(new LsuIssueEntry))
 
-      // 来自 entries
-      when(matchIdx < RS_LS_SIZE.U) {
-        val realIdx = (headPtr + matchIdx)(log2Ceil(RS_LS_SIZE) - 1, 0)
-        storeEntry := entries(realIdx).bits
-      } .otherwise {
+        // 来自 entries
+        when(matchIdx < RS_LS_SIZE.U) {
+          val realIdx = (headPtr + matchIdx)(log2Ceil(RS_LS_SIZE) - 1, 0)
+          storeEntry := entries(realIdx).bits
+        } .otherwise {
         // 来自本周期入队
-        val currentIdx = matchIdx - RS_LS_SIZE.U
-        storeEntry := currentStores(currentIdx).bits
+          val currentIdx = matchIdx - RS_LS_SIZE.U
+          storeEntry := currentStores(currentIdx).bits
+        }
+
+        entry.isMov := true.B
+        entry.phyStoreDataDest := storeEntry.phyStoreDataDest
+        entry.StoreData := storeEntry.StoreData
+        entry.dataReady := storeEntry.dataReady
       }
 
-      entry.isMov := true.B
-      entry.phyStoreDataDest := storeEntry.phyStoreDataDest
-      entry.StoreData := storeEntry.StoreData
-      entry.dataReady := storeEntry.dataReady
+      // === 写入队列 ===
+      val issueIdx = PopCount(realEnq.slice(0,i + 1))
+      val idx = (tailPtr + issueIdx)(log2Ceil(RS_LS_SIZE) - 1, 0)
+      entries(idx).valid := true.B
+      entries(idx).bits := entry
     }
-
-    // === 写入队列 ===
-    val issueIdx = PopCount(realEnq.slice(0,i + 1))
-    val idx = (tailPtr + issueIdx)(log2Ceil(RS_LS_SIZE) - 1, 0)
-    entries(idx).valid := true.B
-    entries(idx).bits := entry
   }
-}
 
 
   val addrBypassHit = WireInit(VecInit(Seq.fill(RS_LS_SIZE)(false.B)))

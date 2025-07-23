@@ -115,8 +115,8 @@ class LSUWithStoreQueueIO extends Bundle {
   val bypassOut = Output(new BypassBus)                        // 输出地址计算结果
 
   // 结果输出接口
-  val resultOut = Decoupled(new BypassBus)                     // 最终结果输出（普通指令）
-  val pseudoOut = Decoupled(new BypassBus)                     // 伪指令结果输出（伪mov指令）
+  val resultOut = ValidIO(new BypassBus)                     // 最终结果输出（普通指令）改为ValidIO
+  val pseudoOut = ValidIO(new BypassBus)                     // 伪指令结果输出（伪mov指令）改为ValidIO
 
   // 外设直连接口
   val perip_addr = Output(UInt(32.W))

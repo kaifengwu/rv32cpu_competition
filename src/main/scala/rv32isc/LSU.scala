@@ -113,20 +113,21 @@ class LSU extends Module {
 
   // 默认初始化输出
   io.issue.ready := state === sIdle
-  io.bypassOut.valid := false.B
-  io.bypassOut.phyDest := 0.U
-  io.bypassOut.data := 0.U
-  io.bypassOut.robIdx := 0.U
 
+  // 旁路输出初始化
+  io.bypassOut.valid := false.B
+  io.bypassOut.reg.phyDest := 0.U
+  io.bypassOut.reg.robIdx := 0.U
+  io.bypassOut.data := 0.U
+
+  // 普通结果输出初始化
   io.resultOut.valid := false.B
-  io.resultOut.bits.valid := false.B
   io.resultOut.bits.phyDest := 0.U
   io.resultOut.bits.data := 0.U
   io.resultOut.bits.robIdx := 0.U
 
   // 伪指令输出端口初始化
   io.pseudoOut.valid := false.B
-  io.pseudoOut.bits.valid := false.B
   io.pseudoOut.bits.phyDest := 0.U
   io.pseudoOut.bits.data := 0.U
   io.pseudoOut.bits.robIdx := 0.U
@@ -188,7 +189,6 @@ class LSU extends Module {
 
           // 直接输出伪mov结果
           io.pseudoOut.valid := true.B
-          io.pseudoOut.bits.valid := true.B
           io.pseudoOut.bits.phyDest := io.issue.bits.phyRd
           io.pseudoOut.bits.data := maskedData
           io.pseudoOut.bits.robIdx := io.issue.bits.robIdx
@@ -218,9 +218,9 @@ class LSU extends Module {
 
             // 发送地址计算结果到旁路总线
             io.bypassOut.valid := true.B
-            io.bypassOut.phyDest := io.issue.bits.phyAddrBase
+            io.bypassOut.reg.phyDest := io.issue.bits.phyAddrBase
+            io.bypassOut.reg.robIdx := io.issue.bits.robIdx
             io.bypassOut.data := addrUnit.io.out.addr
-            io.bypassOut.robIdx := io.issue.bits.robIdx
 
             // 添加回滚检查 - 如果指令在回滚范围内，不进入执行状态
             when(!inRollbackRange) {
@@ -252,7 +252,6 @@ class LSU extends Module {
             
             // 设置结果
             io.resultOut.valid := true.B
-            io.resultOut.bits.valid := true.B
             io.resultOut.bits.phyDest := issueEntryReg.phyRd
             io.resultOut.bits.data := memWithStoreQueue.io.mem.out.rdata
             io.resultOut.bits.robIdx := issueEntryReg.robIdx
@@ -266,7 +265,6 @@ class LSU extends Module {
             
             // 设置结果
             io.resultOut.valid := true.B
-            io.resultOut.bits.valid := true.B
             io.resultOut.bits.phyDest := issueEntryReg.phyRd
             io.resultOut.bits.data := memWithStoreQueue.io.mem.out.rdata
             io.resultOut.bits.robIdx := issueEntryReg.robIdx
@@ -298,7 +296,6 @@ class LSU extends Module {
           when(storeQueue.io.in.enq.ready) {
             // 设置结果
             io.resultOut.valid := true.B
-            io.resultOut.bits.valid := true.B
             io.resultOut.bits.phyDest := 0.U  // store不需要写回
             io.resultOut.bits.data := 0.U
             io.resultOut.bits.robIdx := issueEntryReg.robIdx

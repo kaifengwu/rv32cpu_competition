@@ -10,6 +10,7 @@ class PCRegIO extends Bundle {
     val stall    = Input(Bool())
     val predict = Input(ValidIO(UInt(ADDR_WIDTH.W))) // 来自分支预测器
     val redirect = Input(ValidIO(UInt(ADDR_WIDTH.W))) // 来自EX分支重定向
+    val retTarget = Input(ValidIO(UInt(ADDR_WIDTH.W))) // 来自EX分支重定向
   }
 
   val out = new Bundle {
@@ -37,6 +38,7 @@ class IFStageIO extends Bundle {
     val flush  = Input(Bool())
     val update = Input(ValidIO(new PredictorUpdateBundle))
     val redirect = Input(ValidIO(UInt(ADDR_WIDTH.W)))
+    val retTarget = Input(ValidIO(UInt(ADDR_WIDTH.W)))
   }
 
   val out = new Bundle {
@@ -49,6 +51,7 @@ class IFBundle extends Bundle {
   val inst       = UInt(INST_WIDTH.W)
   val isJump   = Bool() // 是否跳转
   val jumpTarget = UInt(ADDR_WIDTH.W)
+  val isBubble = Bool() // 是否是气泡
 }
 
 class PredictorUpdateBundle extends Bundle {

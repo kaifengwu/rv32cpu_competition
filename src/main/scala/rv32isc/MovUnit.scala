@@ -36,16 +36,27 @@ import config.OoOParams._
 class MovUnit extends Module {
   val io = IO(new MovUnitIO)
 
+  // 定义线网 - 将在组合逻辑中计算出的结果
+  val resultValid = WireDefault(false.B)
+  val resultPhyDest = WireDefault(0.U(PHYS_REG_IDX_WIDTH.W))
+  val resultData = WireDefault(0.U(DATA_WIDTH.W))
+  val resultRobIdx = WireDefault(0.U(ROB_IDX_WIDTH.W))
+
   // 默认输出初始化
-  io.resultOut.valid := false.B
-  io.resultOut.bits.valid := false.B
-  io.resultOut.bits.phyDest := 0.U
-  io.resultOut.bits.data := 0.U
-  io.resultOut.bits.robIdx := 0.U
+  io.resultOut.valid := resultValid
+  io.resultOut.bits.phyDest := resultPhyDest
+  io.resultOut.bits.data := resultData
+  io.resultOut.bits.robIdx := resultRobIdx
+
+  // 旁路输出 - 在组合逻辑阶段直接输出
+  io.bypassBus.valid := resultValid
+  io.bypassBus.reg.phyDest := resultPhyDest
+  io.bypassBus.reg.robIdx := resultRobIdx
+  io.bypassBus.data := resultData
 
   // 默认不忙，可以接收指令
-  io.issue.ready := io.resultOut.ready
-  io.busy := !io.resultOut.ready && io.issue.valid
+  io.issue.ready := true.B  // 总是可以接收指令
+  io.busy := io.issue.valid
 
   // 如果有有效指令，单周期处理
   when(io.issue.valid) {
@@ -88,12 +99,11 @@ class MovUnit extends Module {
       }
     }
 
-    // 直接输出掩码处理后的结果
-    io.resultOut.valid := true.B
-    io.resultOut.bits.valid := true.B
-    io.resultOut.bits.phyDest := io.issue.bits.phyRd
-    io.resultOut.bits.data := maskedData
-    io.resultOut.bits.robIdx := io.issue.bits.robIdx
+    // 将结果保存到线网中
+    resultValid := true.B
+    resultPhyDest := io.issue.bits.phyRd
+    resultData := maskedData
+    resultRobIdx := io.issue.bits.robIdx
   }
 }
 

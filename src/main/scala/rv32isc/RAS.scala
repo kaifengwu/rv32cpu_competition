@@ -5,6 +5,7 @@ import chisel3.util._
 import bundles._
 import config.Configs._
 import config.OoOParams._
+import config.InstType.BR
 
 class RAS extends Module {
   val io = IO(new RASBundle)
@@ -21,6 +22,7 @@ class RAS extends Module {
     val pc = UInt(ADDR_WIDTH.W)
     val depth = UInt(log2Ceil(RAS_DEPTH).W)
     val stackSnapshot = Vec(RAS_DEPTH, UInt(ADDR_WIDTH.W))
+    val overflowCounter = UInt(log2Ceil(RAS_DEPTH * 16).W)
   }
 
   val checkpointStack = RegInit(
@@ -34,9 +36,9 @@ class RAS extends Module {
 
   // === 压栈逻辑 ===
   for (i <- 0 until FETCH_WIDTH) {
-    when(io.in.pushValidVec(i)) {
+    when(io.in.pushReqVec(i).valid && !io.in.stall && !io.in.rollback.valid) {
       when(!isFull) {
-        stack(depth) := io.in.pushDataVec(i)
+        stack(depth) := io.in.pushReqVec(i).bits
         depth := depth + 1.U
       }.otherwise {
         overflowCounter := overflowCounter + 1.U
@@ -46,7 +48,7 @@ class RAS extends Module {
 
   // === 出栈逻辑 ===
   val RetStall = RegInit(false.B)
-  when(io.in.popValid) {
+  when(io.in.popValid && !io.in.stall && !io.in.rollback.valid) {
     when(!isEmpty) {
       depth := depth - 1.U
     }.elsewhen(isFull) {
@@ -73,58 +75,50 @@ class RAS extends Module {
 
   // 快照保存
   for (i <- 0 until ISSUE_WIDTH) {
-    when(io.in.checkpoint(i).valid) {
-      snapshotRing(tailPtr).pc := io.in.checkpoint(i).bits
-      snapshotRing(tailPtr).depth := depth
+    val count = PopCount(io.in.checkpoint.map(_.valid).slice(0,i+1))
+    val idx = (tailPtr + count - 1.U)(log2Ceil(MAX_RAS_CHECKPOINTS) - 1,0)
+    when(io.in.checkpoint(i).valid && !io.in.rollback.valid && !io.in.stall) {
+      snapshotRing(idx).pc := io.in.checkpoint(i).bits
+      snapshotRing(idx).depth := depth
+      snapshotRing(idx).overflowCounter := overflowCounter
       for (j <- 0 until RAS_DEPTH) {
-        snapshotRing(tailPtr).stackSnapshot(j) := stack(j)
+        snapshotRing(idx).stackSnapshot(j) := stack(j)
       }
-      validBits(tailPtr) := true.B
-      tailPtr := tailPtr + 1.U
+      validBits(idx) := true.B
     }
+  }
+  val snapshotCount = Wire(UInt(log2Ceil(ISSUE_WIDTH + 1).W))
+  val hasSnapshot = WireDefault(false.B)
+  snapshotCount := PopCount(io.in.checkpoint.map(_.valid))
+  when(!io.in.rollback.valid && !io.in.stall) { 
+    tailPtr := (tailPtr + snapshotCount)(log2Ceil(MAX_RAS_CHECKPOINTS) - 1, 0 )
   }
 
   // 快照commit
-
-  for (i <- 0 until ISSUE_WIDTH) {
-    when(io.in.commit(i).valid) {
-      when(
-        validBits(headPtr) && snapshotRing(headPtr).pc === io.in.commit(i).bits
-      ) {
-        validBits(headPtr) := false.B
-        headPtr := headPtr + 1.U
-      }
+  when(io.in.commit.valid && !io.in.rollback.valid && !io.in.stall) {
+    when(validBits(headPtr) && snapshotRing(headPtr).pc === io.in.commit.bits) {
+      validBits(headPtr) := false.B
+      headPtr := (headPtr + 1.U)(log2Ceil(MAX_RAS_CHECKPOINTS) - 1,0)
     }
   }
 
   // 快照rollback
+  val rollbackIdx = Wire(UInt(log2Ceil(MAX_RAS_CHECKPOINTS).W))
 
-  for (i <- 0 until ISSUE_WIDTH) {
-    when(io.in.rollback(i).valid) {
-      // 扫描 snapshotRing，找出目标PC的位置
-      for (j <- 0 until MAX_RAS_CHECKPOINTS) {
-        val idx = (headPtr + j.U)(log2Ceil(MAX_RAS_CHECKPOINTS) - 1, 0)
-        when(
-          validBits(idx) && snapshotRing(idx).pc === io.in.rollback(i).bits
-        ) {
-          // 恢复
-          depth := snapshotRing(idx).depth
-          for (k <- 0 until RAS_DEPTH) {
-            stack(k) := snapshotRing(idx).stackSnapshot(k)
-          }
-
-          // 清除 [headPtr, idx] 所有项
-          for (m <- 0 to j) {
-            val clearIdx = (headPtr + m.U)(log2Ceil(MAX_RAS_CHECKPOINTS) - 1, 0)
-            validBits(clearIdx) := false.B
-          }
-
-          // 回退 tailPtr
-          tailPtr := (headPtr + j.U - 1.U)(log2Ceil(MAX_RAS_CHECKPOINTS) - 1, 0)
-          RetStall := false.B
-        }
-      }
+  when(io.in.rollback.valid) {
+    // 扫描 snapshotRing，找出目标PC的位置
+    for (k <- 0 until RAS_DEPTH) {
+      stack(k) := snapshotRing(headPtr).stackSnapshot(k)
     }
+    depth := snapshotRing(headPtr).depth
+    overflowCounter := snapshotRing(headPtr).overflowCounter
+    tailPtr := 0.U
+    headPtr := 0.U
+    snapshotCount := 0.U
+    for(i <- 0 until MAX_RAS_CHECKPOINTS){ 
+      snapshotRing(i) := 0.U.asTypeOf(new Snapshot)
+    }
+    RetStall := false.B
   }
 
   io.out.predictedRet.valid := !isEmpty

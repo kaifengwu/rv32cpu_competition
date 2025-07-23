@@ -22,7 +22,6 @@ class BU_OUT extends Bundle {
   val cmp        = Bool()
   val result     = UInt(ADDR_WIDTH.W) //result存的是jal/jalr的是pc+imm
   val branch_actual_target = UInt(ADDR_WIDTH.W) // 分支跳转的实际目标地址
-  val outValid   = Bool()
   val isBranch   = Bool()
   val mispredict = Bool()
   val targetPredictionCorrect = Bool() // 预测的跳转地址是否正确
@@ -34,6 +33,9 @@ class BU_OUT extends Bundle {
 
   // 添加写回物理寄存器相关信息
   val phyRd = UInt(PHYS_REG_IDX_WIDTH.W)  // 目标物理寄存器编号（对于jal/jalr指令）
+
+  // 添加回滚目标指针
+  val tailPtr = UInt(log2Ceil(FREELIST_SIZE).W)  // 回滚目标指针，用于预测错误时恢复
 }
 
 //ALU相关端口定义
@@ -41,7 +43,6 @@ class ALU_OUT extends Bundle {
     val result = UInt(DATA_WIDTH.W) // 运算结果
     val cmp    = Bool()             // 分支跳转比较结果（如 rs1 == rs2）
     val zero   = Bool()             // result == 0
-    val outValid = Bool()           // 输出是否有效
     val busy = Bool()            // 是否忙碌,用于记分牌
 
     // 添加写回物理寄存器相关信息
@@ -61,20 +62,20 @@ class  ALU_IN extends Bundle {
 
 class ALUIO extends Bundle {
   val in = Input(new ALU_IN)
-  val out = Output(new ALU_OUT) // ALU运算结果
-  val out_ready = Input(Bool()) // 下游是否准备好接收数据
+  val out = ValidIO(new ALU_OUT) // ALU运算结果改为ValidIO
+  val bypassBus = Output(new ALU_OUT) // 添加Bypassbus旁路信号
 }
 
 // 为新的解耦设计添加的接口
 class ALUIO_Decoupled extends Bundle {
   val in = Flipped(Decoupled(new AluIssueEntry))  // 使用AluIssueEntry作为输入
-  val out = Output(new ALU_OUT)                   // ALU运算结果
-  val out_ready = Input(Bool())                   // 下游是否准备好接收数据
+  val out = ValidIO(new ALU_OUT)                  // ALU运算结果改为ValidIO
+  val bypassBus = Output(new ALU_OUT)             // 添加Bypassbus旁路信号
 }
 
 // 为BU添加的解耦设计接口
 class BUIO_Decoupled extends Bundle {
   val in = Flipped(Decoupled(new BrIssueEntry))   // 使用BrIssueEntry作为输入
-  val out = Output(new BU_OUT)                    // BU运算结果
-  val out_ready = Input(Bool())                   // 下游是否准备好接收数据
+  val out = ValidIO(new BU_OUT)                   // BU运算结果改为ValidIO
+  val bypassBus = Output(new BypassBus)           // 添加Bypassbus旁路信号，使用正确的BypassBus类型
 }
