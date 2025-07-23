@@ -71,7 +71,7 @@ class ALUIO_Decoupled extends Bundle {
   val in = Flipped(Decoupled(new AluIssueEntry))  // 使用AluIssueEntry作为输入
   val out = ValidIO(new ALU_OUT)                  // ALU运算结果改为ValidIO
   val bypassBus = Output(new ALU_OUT)             // 添加Bypassbus旁路信号
-  val robWriteback = ValidIO(new RobWritebackEntry)  // 添加专门的ROB写回接口
+  val writebackBus = Output(new WritebackBus)     // 添加专门的写回旁路总线
 }
 
 // 为BU添加的解耦设计接口
@@ -79,5 +79,21 @@ class BUIO_Decoupled extends Bundle {
   val in = Flipped(Decoupled(new BrIssueEntry))   // 使用BrIssueEntry作为输入
   val out = ValidIO(new BU_OUT)                   // BU运算结果改为ValidIO
   val bypassBus = Output(new BypassBus)           // 添加Bypassbus旁路信号，使用正确的BypassBus类型
-  val robWriteback = ValidIO(new RobWritebackEntry)  // 添加专门的ROB写回接口
+  val writebackBus = Output(new WritebackBus)     // 添加专门的写回旁路总线
+}
+
+class WritebackBusREG extends Bundle {
+  val phyDest  = UInt(PHYS_REG_IDX_WIDTH.W)       // 写回的物理寄存器号
+  val robIdx   = UInt(ROB_IDX_WIDTH.W)            // 来源的 ROB 项目编号
+}
+
+class WritebackBus extends Bundle {
+  val valid    = Bool()                           // 是否有效写回
+  val reg     = new WritebackBusREG               // 写回的寄存器信息
+  val data     = UInt(DATA_WIDTH.W)               // 写回的数据
+}
+
+class WritebackUnitIO extends Bundle {
+  val in = Input(Vec(NUM_BYPASS_PORTS, new WritebackBus)) // 写回总线输入
+  val out = Output(Vec(NUM_BYPASS_PORTS, new WritebackBus)) // 写回总线输出
 }

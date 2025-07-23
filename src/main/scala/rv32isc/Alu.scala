@@ -53,9 +53,11 @@ class Alu extends Module {
   io.bypassBus.reg.robIdx := io.in.bits.robIdx
   io.bypassBus.data := result
 
-  // 专门的ROB写回接口
-  io.robWriteback.valid := valid
-  io.robWriteback.bits.robIdx := io.in.bits.robIdx
+  // 专门的写回旁路总线
+  io.writebackBus.valid := valid
+  io.writebackBus.reg.phyDest := io.in.bits.phyRd
+  io.writebackBus.reg.robIdx := io.in.bits.robIdx
+  io.writebackBus.data := result
 
   // 处理输入就绪信号 - 当ALU不忙时，可以接收新指令
   io.in.ready := !busy

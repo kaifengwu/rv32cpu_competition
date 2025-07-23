@@ -70,6 +70,9 @@ class LSU extends Module {
     }
   }
 
+  // 创建全局StoreQueue实例
+  val globalStoreQueue = Module(new StoreQueue)
+
   // 使用MemWithStoreQueue替代直接使用MemoryAccessUnit
   val memWithStoreQueue = Module(new MemWithStoreQueue)
   
@@ -95,6 +98,14 @@ class LSU extends Module {
   // 初始化StoreQueue接口
   memWithStoreQueue.io.storeQueue.commitValid := false.B
   memWithStoreQueue.io.storeQueue.commitEntry := DontCare
+
+  // 初始化全局StoreQueue接口
+  globalStoreQueue.io.in.rollback := io.rollback.valid
+  globalStoreQueue.io.in.rollbackTarget := io.rollback.bits
+  globalStoreQueue.io.in.enq.valid := false.B
+  globalStoreQueue.io.in.enq.bits := DontCare
+  globalStoreQueue.io.in.bypassAddr.valid := false.B
+  globalStoreQueue.io.in.bypassAddr.bits := 0.U
   
   // 地址计算单元
   val addrUnit = Module(new LSUAddressUnit)
@@ -132,9 +143,11 @@ class LSU extends Module {
   io.pseudoOut.bits.data := 0.U
   io.pseudoOut.bits.robIdx := 0.U
 
-  // ROB写回接口初始化
-  io.robWriteback.valid := false.B
-  io.robWriteback.bits.robIdx := 0.U
+  // 写回旁路总线初始化
+  io.writebackBus.valid := false.B
+  io.writebackBus.reg.phyDest := 0.U
+  io.writebackBus.reg.robIdx := 0.U
+  io.writebackBus.data := 0.U
 
   // 外设接口默认值
   io.perip_addr := 0.U
@@ -234,6 +247,7 @@ class LSU extends Module {
           }.otherwise {
             // 无效地址，发送错误
             // 这里可以添加异常处理
+
             state := sIdle
           }
         }
@@ -248,31 +262,51 @@ class LSU extends Module {
         // 处理load/store指令
         when(issueEntryReg.isLoad) {
           // === Load指令处理 ===
+
+          // 首先查询StoreQueue是否有匹配地址的数据
+          globalStoreQueue.io.in.bypassAddr.valid := true.B
+          globalStoreQueue.io.in.bypassAddr.bits := addrResult
+
+          // 当StoreQueue命中时，使用StoreQueue中的数据
+          val useStoreQueueData = globalStoreQueue.io.out.bypass.hit
+          val storeQueueData = globalStoreQueue.io.out.bypass.data
           // 处理外设读取
           when(addrResult >= 0x80200000.U && addrResult < 0x80200100.U) {
-            // 外设读取
-            memWithStoreQueue.io.mem.in.ren := true.B
+            // 外设读取，但仍然优先使用StoreQueue的数据
+            memWithStoreQueue.io.mem.in.ren := !useStoreQueueData  // 只有当StoreQueue未命中时才读取内存
             memWithStoreQueue.io.mem.in.rdata := io.perip_rdata  // 外设数据
             
             // 设置结果
             io.resultOut.valid := true.B
             io.resultOut.bits.phyDest := issueEntryReg.phyRd
-            io.resultOut.bits.data := memWithStoreQueue.io.mem.out.rdata
+            io.resultOut.bits.data := Mux(useStoreQueueData, storeQueueData, memWithStoreQueue.io.mem.out.rdata)
             io.resultOut.bits.robIdx := issueEntryReg.robIdx
             
+            // 设置写回旁路
+            io.writebackBus.valid := true.B
+            io.writebackBus.reg.phyDest := issueEntryReg.phyRd
+            io.writebackBus.reg.robIdx := issueEntryReg.robIdx
+            io.writebackBus.data := Mux(useStoreQueueData, storeQueueData, memWithStoreQueue.io.mem.out.rdata)
+
             state := sIdle
           }.otherwise {
             // 内存读取 - 假设通过同一接口但访问不同地址空间
-            memWithStoreQueue.io.mem.in.ren := true.B
+            memWithStoreQueue.io.mem.in.ren := !useStoreQueueData  // 只有当StoreQueue未命中时才读取内存
             // 这里应该连接到内存接口，但当前似乎复用了外设接口
             // 在实际系统中需要修改
             
             // 设置结果
             io.resultOut.valid := true.B
             io.resultOut.bits.phyDest := issueEntryReg.phyRd
-            io.resultOut.bits.data := memWithStoreQueue.io.mem.out.rdata
+            io.resultOut.bits.data := Mux(useStoreQueueData, storeQueueData, memWithStoreQueue.io.mem.out.rdata)
             io.resultOut.bits.robIdx := issueEntryReg.robIdx
             
+            // 设置写回旁路
+            io.writebackBus.valid := true.B
+            io.writebackBus.reg.phyDest := issueEntryReg.phyRd
+            io.writebackBus.reg.robIdx := issueEntryReg.robIdx
+            io.writebackBus.data := Mux(useStoreQueueData, storeQueueData, memWithStoreQueue.io.mem.out.rdata)
+
             state := sIdle
           }
         }.elsewhen(issueEntryReg.isStore) {
@@ -305,6 +339,7 @@ class LSU extends Module {
             io.resultOut.bits.robIdx := issueEntryReg.robIdx
 
             // 完成后回到空闲状态
+
             state := sIdle
           }
         }

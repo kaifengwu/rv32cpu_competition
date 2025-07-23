@@ -104,9 +104,11 @@ class BU extends Module {
   io.bypassBus.reg.robIdx := robIdx      // 来源的ROB项目编号
   io.bypassBus.data := jumpTarget        // 对于分支和跳转指令，我们传递的是目标地址
 
-  // 专门的ROB写回接口
-  io.robWriteback.valid := valid
-  io.robWriteback.bits.robIdx := robIdx
+  // 专门的写回旁路总线
+  io.writebackBus.valid := valid
+  io.writebackBus.reg.phyDest := phyRd
+  io.writebackBus.reg.robIdx := robIdx
+  io.writebackBus.data := jumpTarget
 
   // 处理输入就绪信号 - 当BU不忙时，可以接收新指令
   io.in.ready := !busy

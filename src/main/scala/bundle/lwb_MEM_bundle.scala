@@ -118,8 +118,8 @@ class LSUWithStoreQueueIO extends Bundle {
   val resultOut = ValidIO(new BypassBus)                     // 最终结果输出（普通指令）改为ValidIO
   val pseudoOut = ValidIO(new BypassBus)                     // 伪指令结果输出（伪mov指令）改为ValidIO
 
-  // ROB写回接口
-  val robWriteback = ValidIO(new RobWritebackEntry)          // 添加专门的ROB写回接口
+  // 写回旁路接口
+  val writebackBus = Output(new WritebackBus)                // 添加专门的写回旁路总线
 
   // 外设直连接口
   val perip_addr = Output(UInt(32.W))
