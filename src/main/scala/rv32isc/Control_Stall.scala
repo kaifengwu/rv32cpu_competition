@@ -47,15 +47,20 @@ class Control_CPU_UNIT extends Module{
 
 
   //回滚
+  val rollBackValid = io.in.br.bits.wrongPredict && io.in.br.valid
   //rob编号回滚
-  io.out.rollBackIdx.valid := io.in.br.bits.wrongPredict
+  io.out.rollBackIdx.valid := rollBackValid
   io.out.rollBackIdx.bits := io.in.br.bits.robIdx
 
+  //rob双编号回滚接口
+  io.out.rollback.valid := rollBackValid
+  io.out.rollback.bits.rollbackIdx := io.in.br.bits.robIdx
+  io.out.rollback.bits.tailIdx := io.in.tailRob
   //pc回滚
-  io.out.rollbackPc.valid := io.in.br.bits.wrongPredict
+  io.out.rollbackPc.valid := rollBackValid
   io.out.rollbackPc.bits := io.in.br.bits.pc
 
   //物理寄存器tailPtr回滚
-  io.out.rollbackTail.valid := io.in.br.bits.wrongPredict
+  io.out.rollbackTail.valid := rollBackValid
   io.out.rollbackTail.bits := io.in.br.bits.tailPtr
 }
