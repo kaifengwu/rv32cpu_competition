@@ -121,6 +121,9 @@ class LSUWithStoreQueueIO extends Bundle {
   // ROB写回接口
   val robWriteback = ValidIO(new RobWritebackEntry)          // 添加专门的ROB写回接口
 
+  // store commit
+  val rob_commit_store = Input(Vec(MAX_COMMIT_STORE, ValidIO(new RobCommitStoreEntry)))
+
   // 外设直连接口
   val perip_addr = Output(UInt(32.W))
   val perip_ren = Output(Bool())

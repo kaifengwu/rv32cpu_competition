@@ -47,6 +47,9 @@ class LSUAddressUnit extends Module {
 class LSU extends Module {
   val io = IO(new LSUWithStoreQueueIO)  // 使用合并后的接口
 
+  // 实例化StoreQueue
+  val storeQueue = Module(new StoreQueue)
+
   // 简化为两状态状态机
   val sIdle :: sExec :: Nil = Enum(2)
   val state = RegInit(sIdle)
@@ -69,6 +72,8 @@ class LSU extends Module {
       inRollbackRange := (issueEntryReg.robIdx >= rollbackIdx) || (issueEntryReg.robIdx < tailIdx)
     }
   }
+  storeQueue.io.in.rollback := io.rollback.valid
+  storeQueue.io.in.rollbackTarget := io.rollback.bits
 
   // 使用MemWithStoreQueue替代直接使用MemoryAccessUnit
   val memWithStoreQueue = Module(new MemWithStoreQueue)
@@ -92,9 +97,20 @@ class LSU extends Module {
   io.perip_wdata := memWithStoreQueue.io.perip_wdata
   memWithStoreQueue.io.perip_rdata := io.perip_rdata
 
+  // StoreQueue 提交逻辑
+  // 检查 ROB 是否有 store 提交
+  val rob_commit_store_valid = io.rob_commit_store.map(_.valid).reduce(_ || _)
+  // 找到提交的 robIdx
+  val rob_commit_store_robIdx = Mux1H(
+    io.rob_commit_store.map(_.valid),
+    io.rob_commit_store.map(_.bits.robIdx)
+  )
+  // 检查提交的 robIdx 是否与 storeQueue 队首匹配
+  val can_commit = storeQueue.io.out.commitValid && (storeQueue.io.out.commitEntry.robIdx === rob_commit_store_robIdx)
+
   // 初始化StoreQueue接口
-  memWithStoreQueue.io.storeQueue.commitValid := false.B
-  memWithStoreQueue.io.storeQueue.commitEntry := DontCare
+  memWithStoreQueue.io.storeQueue.commitValid := rob_commit_store_valid && can_commit
+  memWithStoreQueue.io.storeQueue.commitEntry := storeQueue.io.out.commitEntry
   
   // 地址计算单元
   val addrUnit = Module(new LSUAddressUnit)
@@ -282,13 +298,6 @@ class LSU extends Module {
           // 使用MemWithStoreQueue的StoreQueue接口
           // 注意：这里不使用MemWithStoreQueue的StoreQueue接口
           // 因为我们仍需要先将Store指令加入队列，而MemWithStoreQueue负责从队列提交
-          
-          // 创建新的StoreQueue实例 - 这里实际上应该是访问全局的StoreQueue
-          val storeQueue = Module(new StoreQueue)
-          
-          // 回滚信号连接
-          storeQueue.io.in.rollback := io.rollback.valid
-          storeQueue.io.in.rollbackTarget := io.rollback.bits
           
           // 添加到StoreQueue
           storeQueue.io.in.enq.valid := true.B
