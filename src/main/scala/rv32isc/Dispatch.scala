@@ -49,7 +49,7 @@ class Dispatch extends Module {
     }
 
     // === 发射到 BR ===
-    val brValid = rename.ctrl.brCtrl.isJump || rename.ctrl.brCtrl.isBranch
+    val brValid = rename.ctrl.brCtrl.isJal || rename.ctrl.brCtrl.isJalr || rename.ctrl.brCtrl.isBranch
     io.out.enqBR(i).valid := brValid
     io.out.enqBR(i).bits := {
       val b = Wire(new BrIssueEntry)
@@ -73,6 +73,7 @@ class Dispatch extends Module {
       b.isJal := rename.ctrl.brCtrl.isJal
       b.isJalr := rename.ctrl.brCtrl.isJalr
       b.PredictTarget := rename.jumpTarget
+      b.tailPtr := rename.tailPtr
       b
     }
 

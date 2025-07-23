@@ -17,7 +17,6 @@ class PRFBundle extends Bundle {
     val readRS1 = Input(Vec(ISSUE_WIDTH, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
     val readRS2 = Input(Vec(ISSUE_WIDTH, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
   }
-
   val out = new Bundle {
     // === 源寄存器读取数据 ===
     val readRS1Data  = Vec(ISSUE_WIDTH, UInt(DATA_WIDTH.W))

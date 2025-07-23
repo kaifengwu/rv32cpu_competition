@@ -183,6 +183,8 @@ class ROB extends Module {
     for(i <- 0 until MAX_COMMIT_STORE){ 
       io.out.commit_store(i) := Store_Wire(i)
     }
+    io.out.commitCount.valid := true.B
+    io.out.commitCount.bits := commitWidth
   }.otherwise{
     for(i <- 0 until MAX_COMMIT_WB){ 
       io.out.commit_wb(i) := 0.U.asTypeOf(new RobCommitWbEntry)
@@ -190,6 +192,8 @@ class ROB extends Module {
     for(i <- 0 until MAX_COMMIT_STORE){ 
       io.out.commit_store(i) := 0.U.asTypeOf(new RobCommitStoreEntry)
     }
+    io.out.commitCount.valid := false.B
+    io.out.commitCount.bits := 0.U
   }
 
   io.out.tail := tail
@@ -206,7 +210,7 @@ class RobIndexAllocator extends Module {
 
   // 当前分配和提交数量
   val allocCount  = PopCount(io.in.allocateValid)
-  val commitCount = PopCount(io.in.commitValid)
+  val commitCount = Mux(io.in.commitCount.valid,io.in.commitCount.bits,0.U)
 
   // ROB 剩余空间计算（考虑 wrap）
   val freeCount = Wire(UInt((ROB_IDX_WIDTH + 1).W))
