@@ -50,7 +50,7 @@ class RS_lsu_Reg extends Module {
     data := 0.U.asTypeOf(new LsuIssueEntry)
   }.elsewhen (io.rollback.valid && !inRollbackRange) {
     // 不在目标区域但有回滚信号时，区分两种情况处理
-    when (io.in.fire()) {
+    when (io.in.fire) {
       // 情况1：下一周期保留站发送新指令，stall一个周期（保存数据）
       valid := true.B
       data := io.in.bits
@@ -61,10 +61,10 @@ class RS_lsu_Reg extends Module {
     }
   }.elsewhen (!io.stall) {
     // 非阻塞状态下正常传输数据
-    when (io.out.fire()) {
+    when (io.out.fire) {
       valid := true.B
       data := io.in.bits
-    }.elsewhen (io.out.fire()) {
+    }.elsewhen (io.out.fire) {
       valid := false.B
     }
   }

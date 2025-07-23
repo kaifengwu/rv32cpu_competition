@@ -5,32 +5,6 @@ import config.Configs._
 import config.InstructionConstants._
 import config.OoOParams._
 
-// 保留：现有Bundle（与TEST.scala兼容）
-class MemoryUnitOutput extends Bundle {
-  val aluResult = UInt(DATA_WIDTH.W)
-  val readData = UInt(DATA_WIDTH.W)
-}
-
-class MEM_WB_Data extends Bundle {
-  val memOut = new MemoryUnitOutput
-  val rdAddr = UInt(REG_NUMS_LOG.W)
-  val ctrl = new ControlSignals
-  val pcPlus4 = UInt(ADDR_WIDTH.W)
-  val isLoadInst = Bool()
-  val isJumpInst = Bool()
-}
-
-class MEM_WB_IO extends Bundle {
-  val in = new Bundle {
-    val mem_data = Input(new MEM_WB_Data)
-    val stall = Input(Bool())
-    val flush = Input(Bool())
-    val bubble = Input(Bool())
-  }
-  val out = Output(new MEM_WB_Data)
-  val bubble = Output(Bool())
-}
-
 // 更新：支持StoreQueue的访存模块接口
 class MemoryAccessInput extends Bundle {
   val addr = UInt(ADDR_WIDTH.W)     // 访存地址
@@ -57,31 +31,6 @@ class MemoryAccessOutput extends Bundle {
 class MemoryAccessIO extends Bundle {
   val in = Input(new MemoryAccessInput)
   val out = Output(new MemoryAccessOutput)
-}
-
-// 保留：现有MEM_IO（与TEST.scala兼容）
-class MEM_IO extends Bundle {
-  val in = new Bundle {
-    val data = Input(Vec(FETCH_WIDTH, new EX_OUT))
-    val stall = Input(Vec(FETCH_WIDTH, Bool()))
-    val flush = Input(Vec(FETCH_WIDTH, Bool()))
-    val bubble = Input(Vec(FETCH_WIDTH, Bool()))
-  }
-
-  // 保留：现有外设接口（与TEST.scala兼容）
-  val in_perip = new Bundle {
-    val rdata = Input(UInt(32.W))
-  }
-
-  val out_perip = new Bundle {
-    val addr = Output(UInt(32.W))
-    val wen = Output(Bool())
-    val mask = Output(UInt(2.W))
-    val wdata = Output(UInt(32.W))
-  }
-
-  val out = Output(Vec(FETCH_WIDTH, new MEM_WB_Data))
-  val bubble = Output(Vec(FETCH_WIDTH, Bool()))
 }
 
 // 新增：LSU相关Bundle（为未来LSU设计准备）

@@ -70,7 +70,7 @@ class ALUIO extends Bundle {
 class ALUIO_Decoupled extends Bundle {
   val in = Flipped(Decoupled(new AluIssueEntry))  // 使用AluIssueEntry作为输入
   val out = ValidIO(new ALU_OUT)                  // ALU运算结果改为ValidIO
-  val bypassBus = Output(new ALU_OUT)             // 添加Bypassbus旁路信号
+  val bypassBus = Output(new BypassBus)             // 添加Bypassbus旁路信号
   val writebackBus = Output(new WritebackBus)     // 添加专门的写回旁路总线
 }
 

@@ -13,9 +13,9 @@ class Alu extends Module {
 
   // 从AluIssueEntry提取操作数和控制信号
   val op = io.in.bits.aluCtrl.aluOp
-  val src1 = Mux(io.in.bits.aluCtrl.alu_isAuipc, 
+  val src1 = Mux(io.in.bits.aluCtrl.aluIsAuipc, 
                 io.in.bits.pc,
-                Mux(io.in.bits.aluCtrl.alu_islui, 0.U, io.in.bits.rs1data))
+                Mux(io.in.bits.aluCtrl.aluIsLui, 0.U, io.in.bits.rs1data))
   val src2 = Mux(io.in.bits.aluCtrl.aluSrc, io.in.bits.imm, io.in.bits.rs2data)
   val aluUnsigned = io.in.bits.aluCtrl.aluUnsigned
   val valid = io.in.valid  // 指令有效性由RS_alu_Reg保证（已经过滤回滚区间内的指令）

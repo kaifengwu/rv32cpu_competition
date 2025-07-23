@@ -5,6 +5,7 @@ import chisel3.util._
 import bundles._
 import config.Configs._
 import config.OoOParams._
+import config.LWB_InstructionConstants._
 
 
 // // LSU保留站到MovUnit的转换适配器
@@ -44,15 +45,17 @@ class MovUnit extends Module {
 
   // 默认输出初始化
   io.resultOut.valid := resultValid
-  io.resultOut.bits.phyDest := resultPhyDest
+  io.resultOut.bits.reg.phyDest := resultPhyDest
   io.resultOut.bits.data := resultData
-  io.resultOut.bits.robIdx := resultRobIdx
+  io.resultOut.bits.reg.robIdx := resultRobIdx
 
+/*
   // 旁路输出 - 在组合逻辑阶段直接输出
   io.bypassBus.valid := resultValid
   io.bypassBus.reg.phyDest := resultPhyDest
   io.bypassBus.reg.robIdx := resultRobIdx
   io.bypassBus.data := resultData
+*/
 
   // 写回旁路总线
   io.writebackBus.valid := resultValid
@@ -67,8 +70,8 @@ class MovUnit extends Module {
   // 如果有有效指令，单周期处理
   when(io.issue.valid) {
     // 获取源数据 - 从旁路总线或寄存器文件读取
-    val pseudoData = Mux(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.pseudoSrc).reduce(_ || _),
-                        Mux1H(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.pseudoSrc),
+    val pseudoData = Mux(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.pseudoSrc).reduce(_ || _),
+                        Mux1H(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.pseudoSrc),
                               io.bypassIn.map(_.data)),
                         0.U) // 正常情况下应该从寄存器文件读取
 

@@ -25,7 +25,7 @@ class BU extends Module {
   // 数据提取
   val pc = io.in.bits.pc
   val imm = io.in.bits.imm
-  val predictedTarget = io.in.bits.predictedTarget
+  val predictedTarget = io.in.bits.PredictTarget
 
   // 从保留站获取源操作数
   val src1 = WireDefault(0.U(DATA_WIDTH.W))

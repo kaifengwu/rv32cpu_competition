@@ -5,6 +5,7 @@ import chisel3.util._
 import bundles._
 import config.Configs._
 import config.OoOParams._
+import config.LWB_InstructionConstants._
 
 // 地址计算单元，用于LSU内部
 class LSUAddressUnit extends Module {
@@ -100,8 +101,9 @@ class LSU extends Module {
   memWithStoreQueue.io.storeQueue.commitEntry := DontCare
 
   // 初始化全局StoreQueue接口
-  globalStoreQueue.io.in.rollback := io.rollback.valid
-  globalStoreQueue.io.in.rollbackTarget := io.rollback.bits
+  // globalStoreQueue.io.in.rollback := io.rollback.valid
+  // globalStoreQueue.io.in.rollbackTarget := io.rollback.bits
+  globalStoreQueue.io.in.rollback := io.rollback
   globalStoreQueue.io.in.enq.valid := false.B
   globalStoreQueue.io.in.enq.bits := DontCare
   globalStoreQueue.io.in.bypassAddr.valid := false.B
@@ -111,8 +113,8 @@ class LSU extends Module {
   val addrUnit = Module(new LSUAddressUnit)
   addrUnit.io.in.rs1_data := Mux(state === sIdle,
                                // 如果是新指令，尝试从旁路获取最新值
-                               Mux(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.phyAddrBase).reduce(_ || _),
-                                   Mux1H(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.phyAddrBase),
+                               Mux(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyAddrBaseDest).reduce(_ || _),
+                                   Mux1H(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyAddrBaseDest),
                                          io.bypassIn.map(_.data)),
                                    0.U),  // 正常应该从寄存器文件读取
                                // 使用已保存的地址基值
@@ -133,15 +135,15 @@ class LSU extends Module {
 
   // 普通结果输出初始化
   io.resultOut.valid := false.B
-  io.resultOut.bits.phyDest := 0.U
+  io.resultOut.bits.reg.phyDest := 0.U
   io.resultOut.bits.data := 0.U
-  io.resultOut.bits.robIdx := 0.U
+  io.resultOut.bits.reg.robIdx := 0.U
 
   // 伪指令输出端口初始化
   io.pseudoOut.valid := false.B
-  io.pseudoOut.bits.phyDest := 0.U
+  io.pseudoOut.bits.reg.phyDest := 0.U
   io.pseudoOut.bits.data := 0.U
-  io.pseudoOut.bits.robIdx := 0.U
+  io.pseudoOut.bits.reg.robIdx := 0.U
 
   // 写回旁路总线初始化
   io.writebackBus.valid := false.B
@@ -163,13 +165,13 @@ class LSU extends Module {
   switch(state) {
     is(sIdle) {
       when(io.issue.valid) {
-        val isPseudoMov = io.issue.bits.isPseudoMov
+        val isMov = io.issue.bits.isMov
 
-        when(isPseudoMov) {
+        when(isMov) {
           // === 处理伪mov指令 ===
           // 从旁路获取源数据
-          val pseudoData = Mux(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.dataOrPseudoSrc).reduce(_ || _),
-                              Mux1H(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.dataOrPseudoSrc),
+          val pseudoData = Mux(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyStoreDataDest).reduce(_ || _),
+                              Mux1H(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyStoreDataDest),
                                    io.bypassIn.map(_.data)),
                               0.U) // 正常情况下应该从寄存器文件读取
 
@@ -206,9 +208,9 @@ class LSU extends Module {
 
           // 直接输出伪mov结果
           io.pseudoOut.valid := true.B
-          io.pseudoOut.bits.phyDest := io.issue.bits.phyRd
+          io.pseudoOut.bits.reg.phyDest := io.issue.bits.phyRd
           io.pseudoOut.bits.data := maskedData
-          io.pseudoOut.bits.robIdx := io.issue.bits.robIdx
+          io.pseudoOut.bits.reg.robIdx := io.issue.bits.robIdx
 
           // 保持idle状态，无需进入执行状态
           state := sIdle
@@ -220,8 +222,8 @@ class LSU extends Module {
 
           // 尝试获取store的数据
           when(io.issue.bits.isStore) {
-            when(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.dataOrPseudoSrc).reduce(_ || _)) {
-              storeData := Mux1H(io.bypassIn.map(bp => bp.valid && bp.phyDest === io.issue.bits.dataOrPseudoSrc),
+            when(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyStoreDataDest).reduce(_ || _)) {
+              storeData := Mux1H(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyStoreDataDest),
                                 io.bypassIn.map(_.data))
             }.otherwise {
               storeData := 0.U  // 正常应该从寄存器文件读取
@@ -235,7 +237,7 @@ class LSU extends Module {
 
             // 发送地址计算结果到旁路总线
             io.bypassOut.valid := true.B
-            io.bypassOut.reg.phyDest := io.issue.bits.phyAddrBase
+            io.bypassOut.reg.phyDest := io.issue.bits.phyAddrBaseDest
             io.bypassOut.reg.robIdx := io.issue.bits.robIdx
             io.bypassOut.data := addrUnit.io.out.addr
 
@@ -278,9 +280,9 @@ class LSU extends Module {
             
             // 设置结果
             io.resultOut.valid := true.B
-            io.resultOut.bits.phyDest := issueEntryReg.phyRd
+            io.resultOut.bits.reg.phyDest := issueEntryReg.phyRd
             io.resultOut.bits.data := Mux(useStoreQueueData, storeQueueData, memWithStoreQueue.io.mem.out.rdata)
-            io.resultOut.bits.robIdx := issueEntryReg.robIdx
+            io.resultOut.bits.reg.robIdx := issueEntryReg.robIdx
             
             // 设置写回旁路
             io.writebackBus.valid := true.B
@@ -297,9 +299,9 @@ class LSU extends Module {
             
             // 设置结果
             io.resultOut.valid := true.B
-            io.resultOut.bits.phyDest := issueEntryReg.phyRd
+            io.resultOut.bits.reg.phyDest := issueEntryReg.phyRd
             io.resultOut.bits.data := Mux(useStoreQueueData, storeQueueData, memWithStoreQueue.io.mem.out.rdata)
-            io.resultOut.bits.robIdx := issueEntryReg.robIdx
+            io.resultOut.bits.reg.robIdx := issueEntryReg.robIdx
             
             // 设置写回旁路
             io.writebackBus.valid := true.B
@@ -316,38 +318,32 @@ class LSU extends Module {
           // 使用MemWithStoreQueue的StoreQueue接口
           // 注意：这里不使用MemWithStoreQueue的StoreQueue接口
           // 因为我们仍需要先将Store指令加入队列，而MemWithStoreQueue负责从队列提交
-          
-          // 创建新的StoreQueue实例 - 这里实际上应该是访问全局的StoreQueue
-          val storeQueue = Module(new StoreQueue)
+        
           
           // 回滚信号连接
-          storeQueue.io.in.rollback := io.rollback.valid
-          storeQueue.io.in.rollbackTarget := io.rollback.bits
+          // globalStoreQueue.io.in.rollback := io.rollback.valid
+          // globalStoreQueue.io.in.rollbackTarget := io.rollback.bits
+          globalStoreQueue.io.in.rollback := io.rollback
           
           // 添加到StoreQueue
-          storeQueue.io.in.enq.valid := true.B
-          storeQueue.io.in.enq.bits.robIdx := issueEntryReg.robIdx
-          storeQueue.io.in.enq.bits.addr := addrResult
-          storeQueue.io.in.enq.bits.data := storeData
-          storeQueue.io.in.enq.bits.mask := addrUnit.io.out.accessMask
+          globalStoreQueue.io.in.enq.valid := true.B
+          globalStoreQueue.io.in.enq.bits.robIdx := issueEntryReg.robIdx
+          globalStoreQueue.io.in.enq.bits.addr := addrResult
+          globalStoreQueue.io.in.enq.bits.data := storeData
 
-          when(storeQueue.io.in.enq.ready) {
-            // 设置结果
-            io.resultOut.valid := true.B
-            io.resultOut.bits.phyDest := 0.U  // store不需要写回
-            io.resultOut.bits.data := 0.U
-            io.resultOut.bits.robIdx := issueEntryReg.robIdx
+          // 因为 enq 是 ValidIO，没有 ready 信号，我们假设它总能接收
+          // 所以在将数据送入队列的同一周期，就可以认为执行完成
 
-            // 完成后回到空闲状态
+          // 设置结果
+          io.resultOut.valid := true.B
+          io.resultOut.bits.reg.phyDest := 0.U  // store不需要写回
+          io.resultOut.bits.data := 0.U
+          io.resultOut.bits.reg.robIdx := issueEntryReg.robIdx
 
-            state := sIdle
-          }
+          // 完成后回到空闲状态
+          state := sIdle
         }
       }
     }
   }
-
-  // 默认条件下resultOut和pseudoOut都准备好接收下一个结果
-  io.resultOut.ready := true.B
-  io.pseudoOut.ready := true.B
 }
