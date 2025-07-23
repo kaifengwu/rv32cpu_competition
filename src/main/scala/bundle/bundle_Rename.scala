@@ -31,6 +31,7 @@ class RenameBundle extends Bundle {
   val isRet = Bool() // ★ 添加：是否是 ret 伪指令
   val jumpTarget = UInt(ADDR_WIDTH.W)
   val tailPtr = UInt(log2Ceil(FREELIST_SIZE).W) // 回滚目标指针
+  val isBubble = Bool()
 }
 
 class RenameStageIO extends Bundle {

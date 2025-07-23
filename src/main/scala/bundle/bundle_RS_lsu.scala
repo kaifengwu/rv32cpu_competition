@@ -41,7 +41,7 @@ class LsuRSIO extends Bundle {
   val out = new Bundle {
     val issue = Vec(LSU_UNITS, Decoupled(new LsuIssueEntry))            // 顺序发射出口（正常 LSU）
     val pseudo = Vec(MOV_UNITS, Decoupled(new LsuIssueEntry))           // MOV 发射口
-    val freeEntryCount = Output(UInt(log2Ceil(ISSUE_WIDTH + 1).W))//剩余端口数
+    val isFull = Output(Bool())
   }
 }
 

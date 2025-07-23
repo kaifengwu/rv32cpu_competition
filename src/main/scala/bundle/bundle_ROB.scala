@@ -18,8 +18,8 @@ class RobAllocateEntry extends Bundle {
   val rd         = UInt(PHYS_REG_IDX_WIDTH.W)
 
   // Store 相关字段
-  val addr       = UInt(ADDR_WIDTH.W)     // 来自 EX 单元写回
-  val addrValid  = Bool()                 // 是否写回了地址
+//    val addr       = UInt(ADDR_WIDTH.W)     // 来自 EX 单元写回
+//    val addrValid  = Bool()                 // 是否写回了地址
 }
 
 

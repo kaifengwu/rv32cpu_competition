@@ -103,5 +103,18 @@ class Dispatch extends Module {
       l.isMov := false.B // 若你后续做伪指令处理，此处改为适配逻辑
       l
     }
+    val robValid = !rename.isBubble
+    io.out.allocate(i).valid := robValid && !io.in.stall_by_rs
+    io.out.allocate(i).bits := {
+      val rob = Wire(new RobAllocateEntry)
+      rob.hasRd := io.in.renameVec(i).ctrl.wbCtrl.regWrite
+      rob.isBranch := io.in.renameVec(i).ctrl.brCtrl.isBranch
+      rob.isLoad := io.in.renameVec(i).ctrl.memCtrl.memRead
+      rob.isStore := io.in.renameVec(i).ctrl.memCtrl.memWrite
+      rob.lrd := io.in.renameVec(i).oldPhyRd
+      rob.pc := io.in.renameVec(i).pc
+      rob.robIdx := io.in.renameVec(i).robIdx
+      rob
+    }
   }
 }

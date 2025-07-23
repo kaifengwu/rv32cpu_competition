@@ -16,19 +16,27 @@ class AluRS extends Module {
   
   // === 有效位与空槽判断 ===
   val validVec = Wire(Vec(RS_ALU_SIZE, Bool()))
-
   val freeVec = Wire(Vec(RS_ALU_SIZE, Bool()))
   for (i <- 0 until RS_ALU_SIZE) {
     freeVec(i) := !entries(i).valid
   }
+// === 剩余空间判断 ===
+  val spaceLeft = PopCount(entries.map(!_.valid))
 
+// === 入队指令数量 ===
   val enqVec = io.in.enq
+  val enqCount = PopCount(enqVec.map(_.valid))
+
+// === 入队执行 ===
+  val inputStall = enqCount > spaceLeft
+  io.out.isFull := inputStall || io.in.rollback.valid
+
   val freeIdxVec = getNFreeSlots(freeVec, ISSUE_WIDTH)
 
   for (i <- 0 until ISSUE_WIDTH) {
     val enq = enqVec(i)
     val idx = freeIdxVec(i)
-    when(enq.valid && !io.in.rollback.valid) {
+    when(enq.valid && !io.in.rollback.valid && !inputStall) {
       entries(idx).valid := true.B
       entries(idx).bits  := enq.bits
     }

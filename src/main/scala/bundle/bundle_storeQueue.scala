@@ -19,10 +19,10 @@ class StoreQueueBypassResult extends Bundle {
 
 class StoreQueueIO extends Bundle {
   val in = new Bundle {
-    val enq             = Flipped(Decoupled(new StoreEntry))           // 入队接口
-    val rollback        = Input(Bool())
-    val rollbackTarget  = Input(UInt(ROB_IDX_WIDTH.W))                 // 分支ROB编号
-    val bypassAddr      = Input(Valid(UInt(ADDR_WIDTH.W)))            // 旁路地址（Valid 封装）
+    val enq             = Input(ValidIO(new StoreEntry))           // 入队接口
+    val rollback        = Input(ValidIO(new RsRollbackEntry))
+    val bypassAddr      = Input(ValidIO(UInt(ADDR_WIDTH.W)))            // 旁路地址（Valid 封装）
+    val commit          = Input(Bool())                               // 提交信号
   }
 
   val out = new Bundle {

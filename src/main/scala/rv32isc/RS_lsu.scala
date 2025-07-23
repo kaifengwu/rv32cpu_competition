@@ -17,7 +17,6 @@ class LsuRS extends Module {
 
 // === 剩余空间判断 ===
   val spaceLeft = PopCount(entries.map(!_.valid))
-  io.out.freeEntryCount := Mux(spaceLeft > ISSUE_WIDTH.U, ISSUE_WIDTH.U, spaceLeft)
 
 // === 入队指令数量 ===
   val enqVec = io.in.enq
@@ -26,6 +25,8 @@ class LsuRS extends Module {
 // === 入队执行 ===
   val inputStall = enqCount > spaceLeft
   val realEnq = Wire(Vec(ISSUE_WIDTH, Bool()))
+
+  io.out.isFull := inputStall || io.in.rollback.valid
 
   for (i <- 0 until ISSUE_WIDTH) {
     when(!inputStall && !io.in.rollback.valid){

@@ -40,6 +40,7 @@ class AluRSIO extends Bundle {
   val out = new Bundle {
     val issue = Vec(ALU_UNITS, Decoupled(new AluIssueEntry)) // 发射给多个 ALU 执行单元
     val freeEntryCount = Output(UInt(log2Ceil(ISSUE_WIDTH + 1).W))//剩余端口数
+    val isFull = Output(Bool())
   }
 }
 

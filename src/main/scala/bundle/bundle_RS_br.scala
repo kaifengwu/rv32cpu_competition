@@ -42,5 +42,6 @@ class BrRSIO extends Bundle {
   val out = new Bundle {
     val issue = Vec(BR_UNITS, Decoupled(new BrIssueEntry))   // 发射口（支持多个 BR 执行单元）
     val freeEntryCount = Output(UInt(log2Ceil(ISSUE_WIDTH + 1).W))//剩余端口数
+    val isFull = Output(Bool())
   }
 }
