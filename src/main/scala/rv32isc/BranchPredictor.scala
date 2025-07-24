@@ -51,7 +51,7 @@ class BranchPredictor extends Module {
   // 获取跳转目标地址
   val redirectTarget = targetVec(takenIdx)
   // 构造 mask：从 takenIdx+1 开始为 1
-  val mask = Wire(UInt(FETCH_WIDTH.W))
+  val mask = Wire(Vec(FETCH_WIDTH,Bool()))
   for(i <- 0 until FETCH_WIDTH) {
     // 构造 mask：从 takenIdx+1 开始为 1
     mask(i) := (takenVec.reverse.drop(FETCH_WIDTH - i).reduceOption(_ || _).getOrElse(false.B))
@@ -62,9 +62,8 @@ class BranchPredictor extends Module {
   when(hasTaken) {
     io.out.redirect.valid := true.B
     io.out.redirect.bits  := redirectTarget
-    io.out.maskAfterRedirect := mask
+    io.out.maskAfterRedirect := mask.asUInt
   }
-  io.out.maskAfterRedirect := mask
 
   // === 更新 BHT / BTB（由 EX 阶段发起） ===
   val updateIndex = io.in.update.bits.pc(11, 2)

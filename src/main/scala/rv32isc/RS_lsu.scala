@@ -131,8 +131,8 @@ class LsuRS extends Module {
 
   // === 发射控制 ===
   val MAX_LSU_ISSUE = LSU_UNITS + MOV_UNITS
-  val issueLsu = Wire(Vec(LSU_UNITS, Decoupled(new LsuIssueEntry)))
-  val issuePseudo = Wire(Vec(MOV_UNITS, Decoupled(new LsuIssueEntry)))
+  val issueLsu = WireInit(VecInit(Seq.fill(LSU_UNITS)(0.U.asTypeOf(Decoupled(new LsuIssueEntry)))))
+  val issuePseudo = WireInit(VecInit(Seq.fill(MOV_UNITS)(0.U.asTypeOf(Decoupled(new LsuIssueEntry)))))
   val fireMask = Wire(Vec(MAX_LSU_ISSUE, Bool()))  // 标记已发射
   val canFire  = Wire(Vec(MAX_LSU_ISSUE, Bool()))  // 标记能发射
   val isPseudo = Wire(Vec(MAX_LSU_ISSUE, Bool()))  // 标记是否为伪指令方式发射

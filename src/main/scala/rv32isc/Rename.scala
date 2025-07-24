@@ -72,8 +72,8 @@ class RenameStage extends Module {
     
     // === RAW bypass for rs1 ===
     rename_dispatch_regs(i).io.in.renameVec := renamed
-    rename_dispatch_regs(i).io.in.stall := io.in.stall(i)
-    rename_dispatch_regs(i).io.in.flush := io.in.flush(i) || io.in.idVec(i).isBubble
+    rename_dispatch_regs(i).io.in.stall := io.in.stall
+    rename_dispatch_regs(i).io.in.flush := io.in.flush || io.in.idVec(i).isBubble
 
     io.out.renameVec(i) := rename_dispatch_regs(i).io.out.renameVec
   }

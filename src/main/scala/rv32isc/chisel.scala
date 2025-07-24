@@ -6,7 +6,7 @@ import rv32isc._
 object Main extends App {
   // 生成 SystemVerilog 代码
 
-  val verilog = (new ChiselStage).emitVerilog(new Decoder)
+  val verilog = (new ChiselStage).emitVerilog(new SIM_CPU)
 
   // 打印到控制台
 //    println(verilog)

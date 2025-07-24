@@ -25,6 +25,7 @@ class BU_OUT extends Bundle {
   val isBranch   = Bool()
   val mispredict = Bool()
   val targetPredictionCorrect = Bool() // 预测的跳转地址是否正确
+  val isTaken = Bool() // 是否实际跳转
   val busy       = Bool()
   val pc         = UInt(ADDR_WIDTH.W) // 本条跳转指令的PC值（合并了branch_pc和jal_pc）
   val jal_pc4    = UInt(ADDR_WIDTH.W)
@@ -32,6 +33,7 @@ class BU_OUT extends Bundle {
   val isReturnOut   = Bool() // 是否是返回指令
   val isJal = Bool() // 是否是jal指令
   val isJalr = Bool() // 是否是jalr指令
+
 
   // 添加写回物理寄存器相关信息
   val phyRd = UInt(PHYS_REG_IDX_WIDTH.W)  // 目标物理寄存器编号（对于jal/jalr指令）
@@ -117,5 +119,5 @@ class MovIO_Decoupled extends Bundle {
   val writebackBus = Output(new BypassBus)         // 添加专门的写回旁路总线
   val busy = Output(Bool())                           // 忙信号
   val mov_out = ValidIO(new MOV_OUT)                  // 添加MOV_OUT输出接口供写回寄存器使用
-  val storeEntry = Input(new StoreEntry)              // 添加伪指令数据输入
+//    val storeEntry = Input(new StoreEntry)              // 添加伪指令数据输入
 }

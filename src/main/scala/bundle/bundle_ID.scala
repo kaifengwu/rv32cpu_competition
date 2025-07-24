@@ -90,6 +90,7 @@ class ControlUnitIO extends Bundle {
     val opcode = Input(Vec(FETCH_WIDTH, UInt(7.W)))
     val funct3 = Input(Vec(FETCH_WIDTH, UInt(3.W)))
     val funct7 = Input(Vec(FETCH_WIDTH, UInt(7.W)))
+    val isJump = Input(Vec(FETCH_WIDTH, Bool()))
   }
 
   val out = new Bundle {

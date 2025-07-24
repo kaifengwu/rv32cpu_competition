@@ -56,10 +56,10 @@ class ROBIO extends Bundle {
   }
 
   val out = new Bundle {
-    val commit_wb = Vec(MAX_COMMIT_WB, ValidIO(new RobCommitWbEntry))
-    val commit_store = Vec(MAX_COMMIT_STORE, ValidIO(new RobCommitStoreEntry))
+    val commit_wb = Output(Vec(MAX_COMMIT_WB, ValidIO(new RobCommitWbEntry)))
+    val commit_store = Output(Vec(MAX_COMMIT_STORE, ValidIO(new RobCommitStoreEntry)))
     val commitCount = Output(ValidIO(UInt(ROB_IDX_WIDTH.W)))
-    val tail = UInt(ROB_IDX_WIDTH.W)
+    val tail = Output(UInt(ROB_IDX_WIDTH.W))
     // flush 被移除
   }
 }

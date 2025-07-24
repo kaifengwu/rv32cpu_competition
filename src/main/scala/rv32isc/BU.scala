@@ -100,6 +100,7 @@ class BU extends Module {
   io.out.bits.isReturnOut := isReturn
   io.out.bits.phyRd := phyRd
   io.out.bits.tailPtr := tailPtr // 传递回滚目标指针
+  io.out.bits.isTaken := actualTaken // 是否实际跳转
 
   // 旁路输出 - 在组合逻辑阶段直接输出
   io.bypassBus.valid := valid

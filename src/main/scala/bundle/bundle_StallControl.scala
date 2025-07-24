@@ -45,7 +45,7 @@ class ControlBundleIO extends Bundle{
   }
   val out = new Bundle {
     val rollbackPc      = Output(ValidIO(UInt(ADDR_WIDTH.W))) // 分支失败时恢复状态
-    val rollbackTail = Input(ValidIO(UInt(log2Ceil(FREELIST_SIZE).W))) // 回滚目标指针
+    val rollbackTail = Output(ValidIO(UInt(log2Ceil(FREELIST_SIZE).W))) // 回滚目标指针
     val rollBackIdx = Output(ValidIO(UInt(ROB_IDX_WIDTH.W))) // 回滚目标指令索引
 
     val stall = new Bundle{

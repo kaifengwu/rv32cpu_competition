@@ -35,6 +35,7 @@ class Control extends Module {
     io.out.brCtrl(i).isBranch := opcode === OP_BRANCH
     io.out.brCtrl(i).isJalr   := opcode === OP_JALR
     io.out.brCtrl(i).isJal   := opcode === OP_JAL
+    io.out.brCtrl(i).isJump   := io.in.isJump(i)
 
     // === 源寄存器使用标记 ===
     io.out.useRs1(i) := opcode === OP_R || opcode === OP_I || opcode === OP_LOAD ||

@@ -15,14 +15,12 @@ class LSUAddressUnit extends Module {
   val computedAddr = io.in.rs1_data + io.in.imm
 
   // 地址有效性判断
-  def isValidAddress(addr: UInt, isStore: Bool): Bool = {
-    // 判断地址是否有效的逻辑
-    val iromValid = (addr >= 0x80000000.U) && (addr < 0x80010000.U) && !isStore
-    val dramValid = (addr >= 0x80100000.U) && (addr < 0x80140000.U)
-    val peripValid = (addr >= 0x80200000.U) && (addr < 0x80200100.U)
-
-    iromValid || dramValid || peripValid
-  }
+def isValidAddress(addr: UInt, isStore: Bool): Bool = {
+  val iromValid   = (addr >= 0x80000000L.U) && (addr < 0x80010000L.U) && !isStore
+  val dramValid   = (addr >= 0x80100000L.U) && (addr < 0x80140000L.U)
+  val peripValid  = (addr >= 0x80200000L.U) && (addr < 0x80200100L.U)
+  iromValid || dramValid || peripValid
+}
 
   // 访问掩码计算
   val accessMask = WireDefault("b10".U(2.W))
@@ -33,8 +31,8 @@ class LSUAddressUnit extends Module {
   }
 
   // 外设访问检查（只有DRAM支持非字访问）
-  val isDRAM = (computedAddr >= 0x80100000.U) && (computedAddr < 0x80140000.U)
-  val isPerip = (computedAddr >= 0x80200000.U) && (computedAddr < 0x80200100.U)
+  val isDRAM = (computedAddr >= 0x80100000L.U) && (computedAddr < 0x80140000L.U)
+  val isPerip = (computedAddr >= 0x80200000L.U) && (computedAddr < 0x80200100L.U)
   val maskValid = isDRAM || (isPerip && (accessMask === "b10".U))
 
   // 输出
@@ -66,8 +64,8 @@ class LSU extends Module {
   // 回滚范围判断（复用原逻辑）
   val inRollbackRange = Wire(Bool())
   when(io.rollback.valid) {
-    val rollbackIdx = io.rollback.bits
-    val tailIdx = io.tail
+    val rollbackIdx = io.rollback.bits.rollbackIdx
+    val tailIdx = io.rollback.bits.tailIdx
     when(tailIdx >= rollbackIdx) {
       inRollbackRange := reg_data.entry.robIdx >= rollbackIdx && reg_data.entry.robIdx < tailIdx
     }.otherwise {
@@ -78,7 +76,7 @@ class LSU extends Module {
   }
 
   // 流水线控制信号
-  val stall = Wire(Bool())
+  val stall = false.B
   val flush = inRollbackRange || io.rollback.valid  // 回滚触发冲刷
 
   //-------------------------------------
@@ -95,12 +93,12 @@ class LSU extends Module {
   io.sq_head_robIdx := globalStoreQueue.io.out.commitEntry.robIdx
 
   // 连接外设接口到顶层（保持不变）
-  io.perip_addr := memWithStoreQueue.io.perip_addr
-  io.perip_ren := memWithStoreQueue.io.perip_ren
-  io.perip_wen := memWithStoreQueue.io.perip_wen
-  io.perip_mask := memWithStoreQueue.io.perip_mask
-  io.perip_wdata := memWithStoreQueue.io.perip_wdata
-  memWithStoreQueue.io.perip_rdata := io.perip_rdata
+//    io.perip_addr := memWithStoreQueue.io.perip_addr
+//    io.perip_ren := memWithStoreQueue.io.perip_ren
+//    io.perip_wen := memWithStoreQueue.io.perip_wen
+//    io.perip_mask := memWithStoreQueue.io.perip_mask
+//    io.perip_wdata := memWithStoreQueue.io.perip_wdata
+//    memWithStoreQueue.io.perip_rdata := io.perip_rdata
 
   //-------------------------------------
   // 地址计算阶段
@@ -172,6 +170,7 @@ class LSU extends Module {
   memWithStoreQueue.io.mem.in.funct3 := reg_data.entry.func3
   memWithStoreQueue.io.mem.in.fromStoreQueue := false.B
   memWithStoreQueue.io.mem.in.robIdx := reg_data.entry.robIdx
+  memWithStoreQueue.io.storeQueue.commitValid := io.commit
 
 // 结果输出逻辑 (统一在第二周期输出)
   val loadResult = Mux(globalStoreQueue.io.out.bypass.hit,
@@ -181,6 +180,7 @@ class LSU extends Module {
   val finalResult = Mux(reg_data.entry.isMov, pseudoResult, loadResult)
 
   io.resultOut.valid := reg_valid && (reg_data.entry.isLoad || reg_data.entry.isStore || reg_data.entry.isMov)
+  io.resultOut.bits.valid := reg_valid && (reg_data.entry.isLoad || reg_data.entry.isStore || reg_data.entry.isMov)
   io.resultOut.bits.reg.phyDest := Mux(reg_data.entry.isStore, 0.U, reg_data.entry.phyRd)
   io.resultOut.bits.data := Mux(reg_data.entry.isStore, 0.U, finalResult)
   io.resultOut.bits.reg.robIdx := reg_data.entry.robIdx
@@ -204,22 +204,21 @@ class LSU_Top extends Module {
     val bypassOut = Output(new BypassBus)
 
     // 结果输出接口
-    val resultOut = ValidIO(new BypassBus)
+    val resultOut = Output(new BypassBus)
 
     // 写回旁路接口
     val writebackBus = Output(new WritebackBus)
 
     // 外设直连接口
-    val perip_addr = Output(UInt(32.W))
-    val perip_ren = Output(Bool())
-    val perip_wen = Output(Bool())
-    val perip_mask = Output(UInt(2.W))
-    val perip_wdata = Output(UInt(32.W))
-    val perip_rdata = Input(UInt(32.W))
+//      val perip_addr = Output(UInt(32.W))
+//      val perip_ren = Output(Bool())
+//      val perip_wen = Output(Bool())
+//      val perip_mask = Output(UInt(2.W))
+//      val perip_wdata = Output(UInt(32.W))
+//      val perip_rdata = Input(UInt(32.W))
 
     // 回滚信号
-    val rollback = Input(Valid(UInt(ROB_IDX_WIDTH.W)))
-    val tail = Input(UInt(ROB_IDX_WIDTH.W))
+    val rollback = Input(Valid(new RsRollbackEntry))
 
     // 新增: 来自ROB的Store提交请求
     val commit_store = Input(ValidIO(new RobCommitStoreEntry))
@@ -245,37 +244,31 @@ class LSU_Top extends Module {
   // --- 逻辑添加完毕 ---
 
   // 回滚相关信号处理
-  val rollbackEntry = Wire(new RsRollbackEntry)
-  rollbackEntry.rollbackIdx := io.rollback.bits
-  rollbackEntry.tailIdx := io.tail
 
   // ========= RS_lsu_Reg连接 =========
   rs_lsu_reg.io.in <> io.issue
   rs_lsu_reg.io.stall := false.B
   rs_lsu_reg.io.flush := false.B
-  rs_lsu_reg.io.rollback.valid := io.rollback.valid
-  rs_lsu_reg.io.rollback.bits := rollbackEntry
+  rs_lsu_reg.io.rollback:= io.rollback
 
   // ========= LSU核心单元连接 =========
   lsu_core.io.issue <> rs_lsu_reg.io.out
   lsu_core.io.rollback := io.rollback
-  lsu_core.io.tail := io.tail
 
   // LSU外设接口连接
-  io.perip_addr := lsu_core.io.perip_addr
-  io.perip_ren := lsu_core.io.perip_ren
-  io.perip_wen := lsu_core.io.perip_wen
-  io.perip_mask := lsu_core.io.perip_mask
-  io.perip_wdata := lsu_core.io.perip_wdata
-  lsu_core.io.perip_rdata := io.perip_rdata
+//    io.perip_addr := lsu_core.io.perip_addr
+//    io.perip_ren := lsu_core.io.perip_ren
+//    io.perip_wen := lsu_core.io.perip_wen
+//    io.perip_mask := lsu_core.io.perip_mask
+//    io.perip_wdata := lsu_core.io.perip_wdata
+//    lsu_core.io.perip_rdata := io.perip_rdata
 
   // ========= lsu_Next_Reg连接 =========
   // lsu_Next_Reg输入连接
   lsu_next_reg.io.in <> lsu_core.io.resultOut
   lsu_next_reg.io.stall := false.B  // 这里可以根据实际需求调整
   lsu_next_reg.io.flush := false.B  // 这里可以根据实际需求调整
-  lsu_next_reg.io.rollback.valid := io.rollback.valid
-  lsu_next_reg.io.rollback.bits := rollbackEntry
+  lsu_next_reg.io.rollback := io.rollback
 
   // ========= 输出连接 =========
   // 第一周期组合逻辑结束后输出的Bypass旁路信号

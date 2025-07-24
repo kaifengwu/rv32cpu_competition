@@ -88,18 +88,18 @@ class MemWithStoreQueue extends Module {
     val mem = new MemoryAccessIO
 
     // 外设接口
-    val perip_addr = Output(UInt(32.W))
-    val perip_ren = Output(Bool())
-    val perip_wen = Output(Bool())
-    val perip_mask = Output(UInt(2.W))
-    val perip_wdata = Output(UInt(32.W))
-    val perip_rdata = Input(UInt(32.W))
+//      val perip_addr = Output(UInt(32.W))
+//      val perip_ren = Output(Bool())
+//      val perip_wen = Output(Bool())
+//      val perip_mask = Output(UInt(2.W));
+//      val perip_wdata = Output(UInt(32.W))
+//      val perip_rdata = Input(UInt(32.W))
 
     // StoreQueue提交接口
-    val storeQueue = new Bundle {
-      val commitValid = Input(Bool())  // 有效提交信号
-      val commitEntry = Input(new StoreEntry)  // 提交的存储条目
-    }
+     val storeQueue = new Bundle {
+       val commitValid = Input(Bool())  // 有效提交信号;
+//         val commitEntry = Input(new StoreEntry)  // 提交的存储条目
+     }
   })
 
   // 内部访存单元
@@ -111,30 +111,30 @@ class MemWithStoreQueue extends Module {
   memUnit.io.in.wen := io.mem.in.wen
   memUnit.io.in.mask := io.mem.in.mask
   memUnit.io.in.wdata := io.mem.in.wdata
-  memUnit.io.in.rdata := io.perip_rdata
+//    memUnit.io.in.rdata := io.perip_rdata
   memUnit.io.in.funct3 := io.mem.in.funct3
   memUnit.io.in.fromStoreQueue := false.B
   memUnit.io.in.robIdx := io.mem.in.robIdx
 
   // 优先处理来自StoreQueue的提交请求
   when(io.storeQueue.commitValid) {
-    memUnit.io.in.addr := io.storeQueue.commitEntry.addr
+//      memUnit.io.in.addr := io.storeQueue.commitEntry.addr
     memUnit.io.in.ren := false.B
     memUnit.io.in.wen := true.B
     // 基于地址设置适当的掩码，这里简化为字访问
     memUnit.io.in.mask := "b10".U
-    memUnit.io.in.wdata := io.storeQueue.commitEntry.data
+//      memUnit.io.in.wdata := io.storeQueue.commitEntry.data
     memUnit.io.in.fromStoreQueue := true.B
-    memUnit.io.in.robIdx := io.storeQueue.commitEntry.robIdx
+//      memUnit.io.in.robIdx := io.storeQueue.commitEntry.robIdx
   }
 
   // 连接到外设接口
-  io.perip_addr := memUnit.io.out.addr
-  io.perip_ren := memUnit.io.out.ren
-  io.perip_wen := memUnit.io.out.wen
-  io.perip_mask := memUnit.io.out.mask
-  io.perip_wdata := memUnit.io.out.wdata
-
+//    io.perip_addr := memUnit.io.out.addr
+//    io.perip_ren := memUnit.io.out.ren
+//    io.perip_wen := memUnit.io.out.wen
+//    io.perip_mask := memUnit.io.out.mask
+//    io.perip_wdata := memUnit.io.out.wdata
+ 
   // 返回结果给LSU
   io.mem.out := memUnit.io.out
 }

@@ -37,7 +37,7 @@ class MovUnit extends Module {
   // 如果有有效指令，单周期处理
   when(io.issue.valid) {
     // 获取源数据 - 从StoreEntry获取
-    val pseudoData = io.storeEntry.data
+    val pseudoData = io.issue.bits.StoreData
 
     // 掩码计算逻辑 - 类似LSU中的掩码计算
     val maskedData = WireDefault(pseudoData)
@@ -103,7 +103,7 @@ class MovU_Top extends Module {
     val writebackBus = Output(new BypassBus)
 
     // 伪指令数据输入
-    val storeEntry = Input(new StoreEntry)
+//      val storeEntry = Input(new StoreEntry)
 
     // 控制信号
     val stall = Input(Bool())
@@ -125,7 +125,7 @@ class MovU_Top extends Module {
   movUnit.io.issue <> rs_movU_reg.io.out
 
   // 连接storeEntry
-  movUnit.io.storeEntry := io.storeEntry
+//    movUnit.io.storeEntry := io.storeEntry
 
   // 实例化MovU_Next_Reg (即 MOV_WB_Reg)
   val movU_next_reg = Module(new MOV_WB_Reg)

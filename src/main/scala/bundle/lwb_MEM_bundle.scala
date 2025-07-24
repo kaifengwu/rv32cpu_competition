@@ -60,26 +60,24 @@ class LSUWithStoreQueueIO extends Bundle {
   val issue = Flipped(Decoupled(new LsuIssueEntry))
 
   // 旁路总线接口
-  val bypassIn = Input(Vec(NUM_BYPASS_PORTS, new BypassBus))   // 接收前馈数据
   val bypassOut = Output(new BypassBus)                        // 输出地址计算结果
 
   // 结果输出接口 (统一为一个)
-  val resultOut = ValidIO(new BypassBus)                     // 最终结果输出（Load或伪指令）
+   val resultOut = ValidIO(new BypassBus)                     // 最终结果输出（Load或伪指令）
 
   // 写回旁路接口
-  val writebackBus = Output(new WritebackBus)                // 添加专门的写回旁路总线
+  val writebackBus = Output(new BypassBus)                // 添加专门的写回旁路总线
 
   // 外设直连接口
-  val perip_addr = Output(UInt(32.W))
-  val perip_ren = Output(Bool())
-  val perip_wen = Output(Bool())
-  val perip_mask = Output(UInt(2.W))
-  val perip_wdata = Output(UInt(32.W))
-  val perip_rdata = Input(UInt(32.W))
+//    val perip_addr = Output(UInt(32.W))
+//    val perip_ren = Output(Bool());
+//    val perip_wen = Output(Bool())
+//    val perip_mask = Output(UInt(2.W));
+//    val perip_wdata = Output(UInt(32.W))
+//    val perip_rdata = Input(UInt(32.W))
 
   // 回滚信号
-  val rollback = Input(Valid(UInt(ROB_IDX_WIDTH.W)))
-  val tail = Input(UInt(ROB_IDX_WIDTH.W))
+  val rollback = Input(ValidIO(new RsRollbackEntry)) // 回滚信号，包含回滚地址和有效位
 
   // StoreQueue 提交信号
   val commit = Input(Bool())

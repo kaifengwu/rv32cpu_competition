@@ -42,13 +42,13 @@ class RenameStageIO extends Bundle {
     val rollbackTail = Input(ValidIO(UInt(log2Ceil(FREELIST_SIZE).W))) // 回滚目标指针
     val rollbackPc = Input(ValidIO(UInt(ADDR_WIDTH.W))) // 回滚目标指针
 
-    val robIdx = Output(Vec(ISSUE_WIDTH, UInt(ROB_IDX_WIDTH.W))) // 分配编号
+    val robIdx = Input(Vec(ISSUE_WIDTH, UInt(ROB_IDX_WIDTH.W))) // 分配编号
     val stall = Input(Bool())
     val flush = Input(Bool())
   }
 
   val out = new Bundle {
-    val allocateValid = Input(Vec(ISSUE_WIDTH, Bool())) // 分配RobIdx的有效性标志
+    val allocateValid = Output(Vec(ISSUE_WIDTH, Bool())) // 分配RobIdx的有效性标志
     val renameVec = Output(Vec(ISSUE_WIDTH, new RenameBundle)) // 输出重命名结果
   }
 }

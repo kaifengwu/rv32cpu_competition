@@ -49,7 +49,7 @@ class BrRS extends Module {
   val canFire = WireDefault(VecInit(Seq.fill(BR_UNITS)(false.B)))
 
   for (u <- 0 until BR_UNITS) {
-    val idx = (headPtr + u.U)(log2Ceil(RS_BR_SIZE),0)
+    val idx = (headPtr + u.U)(log2Ceil(RS_BR_SIZE) - 1,0)
     val entry = entries(idx)
 
     val bypassRs1 = WireDefault(false.B)

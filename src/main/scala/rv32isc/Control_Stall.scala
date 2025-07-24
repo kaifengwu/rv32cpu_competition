@@ -33,6 +33,7 @@ class Control_CPU_UNIT extends Module{
   val update_valid = io.in.br.bits.isBranch || io.in.br.bits.isJal || io.in.br.bits.isJalr || !io.in.br.bits.isRet
   io.out.update.bits.pc := io.in.br.bits.pc
   io.out.update.bits.target := io.in.br.bits.predictTarget
+  io.out.update.bits.taken := io.in.br.bits.isJump
   io.out.update.valid := update_valid
 
   //PC寄存器重更新
@@ -47,7 +48,10 @@ class Control_CPU_UNIT extends Module{
 
 
   //回滚
-  val rollBackValid = io.in.br.bits.wrongPredict && io.in.br.valid
+  val rollBackValid = WireDefault(false.B)
+  rollBackValid := io.in.br.bits.wrongPredict && io.in.br.valid
+
+
   //rob编号回滚
   io.out.rollBackIdx.valid := rollBackValid
   io.out.rollBackIdx.bits := io.in.br.bits.robIdx

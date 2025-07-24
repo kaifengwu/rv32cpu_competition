@@ -187,10 +187,10 @@ class ROB extends Module {
     io.out.commitCount.bits := commitWidth
   }.otherwise{
     for(i <- 0 until MAX_COMMIT_WB){ 
-      io.out.commit_wb(i) := 0.U.asTypeOf(new RobCommitWbEntry)
+      io.out.commit_wb(i) := 0.U.asTypeOf(Valid(new RobCommitWbEntry))
     }
     for(i <- 0 until MAX_COMMIT_STORE){ 
-      io.out.commit_store(i) := 0.U.asTypeOf(new RobCommitStoreEntry)
+      io.out.commit_store(i) := 0.U.asTypeOf(Valid(new RobCommitStoreEntry))
     }
     io.out.commitCount.valid := false.B
     io.out.commitCount.bits := 0.U
