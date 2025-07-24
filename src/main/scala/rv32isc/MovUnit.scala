@@ -86,3 +86,63 @@ class MovUnit extends Module {
   io.mov_out.bits.robIdx := resultRobIdx
   io.mov_out.bits.busy := io.issue.valid
 }
+
+// MovUnit的顶层模块，整合RS_MovU_Reg、MovUnit和MovU_Next_Reg(即MOV_WB_Reg)
+class MovU_Top extends Module {
+  val io = IO(new Bundle {
+    // 从保留站接收指令
+    val issue = Flipped(Decoupled(new LsuIssueEntry))
+
+    // 写回接口
+    val rob_wb = Output(ValidIO(new RobWritebackEntry))
+
+    // 输出结果接口
+    val resultOut = Output(new BypassBus)
+
+    // 写回旁路总线
+    val writebackBus = Output(new BypassBus)
+
+    // 伪指令数据输入
+    val storeEntry = Input(new StoreEntry)
+
+    // 控制信号
+    val stall = Input(Bool())
+    val flush = Input(Bool())
+
+    // 回滚信号
+    val rollback = Input(Valid(new RsRollbackEntry))
+  })
+
+  // 实例化RS_MovU_Reg
+  val rs_movU_reg = Module(new RS_MovU_Reg)
+  rs_movU_reg.io.in <> io.issue
+  rs_movU_reg.io.stall := io.stall
+  rs_movU_reg.io.flush := io.flush
+  rs_movU_reg.io.rollback := io.rollback
+
+  // 实例化MovUnit
+  val movUnit = Module(new MovUnit)
+  movUnit.io.issue <> rs_movU_reg.io.out
+
+  // 连接storeEntry
+  movUnit.io.storeEntry := io.storeEntry
+
+  // 实例化MovU_Next_Reg (即 MOV_WB_Reg)
+  val movU_next_reg = Module(new MOV_WB_Reg)
+  movU_next_reg.io.in <> movUnit.io.mov_out
+  movU_next_reg.io.stall := io.stall
+  movU_next_reg.io.flush := io.flush
+  movU_next_reg.io.rollback := io.rollback
+
+  // 连接写回接口
+  io.rob_wb <> movU_next_reg.io.rob_wb
+
+  // 从MovUnit输出结果总线 - 提供即时结果
+  io.resultOut := movUnit.io.resultOut
+
+  // 从MovU_Next_Reg输出WritebackBus信号
+  io.writebackBus.valid := movU_next_reg.io.rob_wb.valid
+  io.writebackBus.reg.phyDest := movU_next_reg.io.out.phyRd
+  io.writebackBus.reg.robIdx := movU_next_reg.io.out.robIdx
+  io.writebackBus.data := movU_next_reg.io.out.result
+}

@@ -117,4 +117,5 @@ class MovIO_Decoupled extends Bundle {
   val writebackBus = Output(new BypassBus)         // 添加专门的写回旁路总线
   val busy = Output(Bool())                           // 忙信号
   val mov_out = ValidIO(new MOV_OUT)                  // 添加MOV_OUT输出接口供写回寄存器使用
+  val storeEntry = Input(new StoreEntry)              // 添加伪指令数据输入
 }
