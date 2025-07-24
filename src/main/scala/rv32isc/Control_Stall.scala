@@ -63,4 +63,8 @@ class Control_CPU_UNIT extends Module{
   //物理寄存器tailPtr回滚
   io.out.rollbackTail.valid := rollBackValid
   io.out.rollbackTail.bits := io.in.br.bits.tailPtr
+
+  //分支预测成功给RAS
+  io.out.commit_to_Ras.valid := io.in.br.valid && io.in.br.bits.isBranch && !io.in.br.bits.wrongPredict
+  io.out.commit_to_Ras.bits := io.in.br.bits.pc //分支成功 commit 后移除快照
 }

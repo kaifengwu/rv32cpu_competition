@@ -150,10 +150,6 @@ object LWB_InstructionConstants {
 
 object OoOParams {
   val ISSUE_WIDTH  = 2
-  val MAX_COMMIT_WB = 2
-  val MAX_COMMIT_BR = 1
-  val MAX_COMMIT_STORE = 1
-  val MAX_COMMIT_WIDTH = MAX_COMMIT_BR + MAX_COMMIT_WB + MAX_COMMIT_STORE
 
 
   val PHYS_REG_NUM = 128 
@@ -177,6 +173,7 @@ object OoOParams {
   val NUM_BYPASS_PORTS = ALU_UNITS + LSU_UNITS + MOV_UNITS + BR_UNITS
   val EXEC_UNITS = ALU_UNITS + BR_UNITS + LSU_UNITS + MOV_UNITS
 
+  val MAX_COMMIT_WIDTH = ALU_UNITS + BR_UNITS + LSU_UNITS + MOV_UNITS // 最大提交宽度
 
   //RAS参数
   val RAS_DEPTH = 32

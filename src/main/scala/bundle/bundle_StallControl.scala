@@ -38,6 +38,7 @@ class ControlBundleIO extends Bundle{
      val rollBack = Input(ValidIO(new RollbackSignal))
      val predictedRet = Input(ValidIO(UInt(ADDR_WIDTH.W)))// RAS预测出的 ret 跳转目标（ValidIO）
      val tailRob = Input(UInt(ROB_IDX_WIDTH.W)) //ROB的栈顶
+
   }
   val out = new Bundle {
     val rollbackPc      = Output(ValidIO(UInt(ADDR_WIDTH.W))) // 分支失败时恢复状态
@@ -61,5 +62,7 @@ class ControlBundleIO extends Bundle{
     val retTarget = Output(ValidIO(UInt(ADDR_WIDTH.W))) // 来自EX分支重定向
     val update = Output(ValidIO(new PredictorUpdateBundle)) //分支预测器更新
     val rollback = Output(ValidIO(new RsRollbackEntry))
+
+    val commit_to_Ras = Output(ValidIO(UInt(ADDR_WIDTH.W))) // 分支成功 commit 后移除快照
   }
 }

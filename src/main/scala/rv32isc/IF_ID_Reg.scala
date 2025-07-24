@@ -19,6 +19,9 @@ class IF_ID_Reg extends Module {
     reg := 0.U.asTypeOf(new IFBundle)
   }.elsewhen(!io.stall) {
     reg := io.in
+  }.otherwise{
+    reg := reg // 保持当前状态
   }
+
   io.out := reg
 }
