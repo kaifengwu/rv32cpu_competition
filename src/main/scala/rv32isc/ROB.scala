@@ -14,7 +14,7 @@ class ROB extends Module {
     val hasRd   = Bool()
     val isStore = Bool()
     val rd      = UInt(PHYS_REG_IDX_WIDTH.W)
-    val lrd     = UInt(REG_NUMS.W)
+    val lrd     = UInt(REG_NUMS_LOG.W)
     val pc      = UInt(ADDR_WIDTH.W)
     val ready   = Bool() // 仅标志写回是否完成
   }
@@ -224,15 +224,18 @@ class RobIndexAllocator extends Module {
   io.out.isFull := freeCount < allocCount
 
   // 分配编号输出（截断掉 wrap 位）
+  
   for (i <- 0 until ISSUE_WIDTH) {
-    io.out.allocateIdx(i) := (tailPtr + i.U)(ROB_IDX_WIDTH - 1, 0)
+    val count = PopCount(io.in.allocateValid.slice(0, i + 1))
+    io.out.allocateIdx(i) := Mux(io.in.allocateValid(i), (tailPtr + count)(ROB_IDX_WIDTH - 1, 0), 0.U)
   }
 
   // 指针更新
-  when(!io.out.isFull && !io.in.rollback.valid && !io.in.stall) {
-    tailPtr := tailPtr + allocCount
-  }.elsewhen(io.in.rollback.valid){ 
+
+  when(io.in.rollback.valid) {
     tailPtr := io.in.rollback.bits
+  } .elsewhen(!io.out.isFull && !io.in.stall) {
+    tailPtr := tailPtr + allocCount
   }
 
   when(!io.in.rollback.valid){

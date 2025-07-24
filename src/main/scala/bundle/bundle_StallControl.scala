@@ -13,6 +13,9 @@ class RollbackSignal extends Bundle{
 
 class ControlBundleIO extends Bundle{
   val in = new Bundle {
+     val stall = Input(Bool()) // 阶段停顿
+     val flush = Input(Bool()) // 阶段停顿
+
      val rs = new Bundle{
         val alu_rs_full = Input(Bool())
         val br_rs_full = Input(Bool())

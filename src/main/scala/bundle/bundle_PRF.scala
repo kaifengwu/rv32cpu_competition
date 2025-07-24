@@ -16,13 +16,18 @@ class PRFBundle extends Bundle {
     // === 源寄存器读取请求 ===
     val readRS1 = Input(Vec(ISSUE_WIDTH, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
     val readRS2 = Input(Vec(ISSUE_WIDTH, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W))))
+
+    // === 提交阶段写回（来自 ROB） ===，调试用端口
+    val commit_wb = Input(Vec(MAX_COMMIT_WB, ValidIO(UInt(PHYS_REG_IDX_WIDTH.W)))) // 提交阶段写回
   }
   val out = new Bundle {
     // === 源寄存器读取数据 ===
-    val readRS1Data  = Vec(ISSUE_WIDTH, UInt(DATA_WIDTH.W))
-    val readRS1Ready = Vec(ISSUE_WIDTH, Bool())  // 改名为 Ready，表示数据是否准备好
+    val readRS1Data  = Output(Vec(ISSUE_WIDTH, UInt(DATA_WIDTH.W)))
+    val readRS1Ready = Output(Vec(ISSUE_WIDTH, Bool()))  // 改名为 Ready，表示数据是否准备好
 
-    val readRS2Data  = Vec(ISSUE_WIDTH, UInt(DATA_WIDTH.W))
-    val readRS2Ready = Vec(ISSUE_WIDTH, Bool())
+    val readRS2Data  = Output(Vec(ISSUE_WIDTH, UInt(DATA_WIDTH.W)))
+    val readRS2Ready = Output(Vec(ISSUE_WIDTH, Bool()))
+
+    val commit_out_data = Output(Vec(MAX_COMMIT_WB, ValidIO(UInt(DATA_WIDTH.W)))) // 提交阶段写回数据
   }
 }

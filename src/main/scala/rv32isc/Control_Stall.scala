@@ -11,8 +11,8 @@ import config.OoOParams._
 class Control_CPU_UNIT extends Module{
   val io = IO(new ControlBundleIO)
   //stall 信号处理
-  val stall_by_rs = io.in.rs.alu_rs_full || io.in.rs.br_rs_full || io.in.rs.lsu_rs_full
-  val stall_by_rob_full = io.in.robFull
+  val stall_by_rs = io.in.rs.alu_rs_full || io.in.rs.br_rs_full || io.in.rs.lsu_rs_full || io.in.stall
+  val stall_by_rob_full = io.in.robFull 
 
 
   io.out.stall.stall_IF := stall_by_rs || stall_by_rob_full
@@ -20,9 +20,9 @@ class Control_CPU_UNIT extends Module{
   io.out.stall.stall_RE := stall_by_rs 
 
 
-  val flush_by_ret_waiting = io.in.waitRet
-  val flush_by_return = io.in.predictedRet.valid
-  val flush_by_rollback = io.in.rollBack.valid
+  val flush_by_ret_waiting = io.in.waitRet || io.in.flush
+  val flush_by_return = io.in.predictedRet.valid || io.in.flush
+  val flush_by_rollback = io.in.rollBack.valid || io.in.flush
 
   //flush 信号处理
   io.out.flush.flush_IF := flush_by_ret_waiting || flush_by_rollback || flush_by_return

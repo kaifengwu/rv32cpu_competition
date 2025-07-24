@@ -11,14 +11,14 @@ class PRF extends Module {
   val io = IO(new PRFBundle)
 
   val regfile = Reg(Vec(PHYS_REG_NUM, UInt(DATA_WIDTH.W)))
-  val valid   = RegInit(VecInit(Seq.fill(PHYS_REG_NUM)(false.B)))
+  val valid = RegInit(VecInit(Seq.fill(PHYS_REG_NUM)(false.B)))
 
   // === 写回路径：旁路广播 ===
   for (i <- 0 until NUM_BYPASS_PORTS) {
     val wb = io.in.write(i)
     when(wb.valid && wb.reg.phyDest =/= 0.U) {
       regfile(wb.reg.phyDest) := wb.data
-      valid(wb.reg.phyDest)   := true.B
+      valid(wb.reg.phyDest) := true.B
     }
   }
 
@@ -26,6 +26,14 @@ class PRF extends Module {
   for (i <- 0 until ISSUE_WIDTH) {
     when(io.in.alloc(i).valid && io.in.alloc(i).bits =/= 0.U) {
       valid(io.in.alloc(i).bits) := false.B
+    }
+  }
+  for (i <- 0 until MAX_COMMIT_WB) {
+    when(io.in.commit_wb(i).valid) {
+      io.out.commit_out_data(i).bits := regfile(io.in.commit_wb(i).bits)
+      io.out.commit_out_data(i).valid := true.B
+    }.otherwise{
+      io.out.commit_out_data(i).valid := false.B
     }
   }
 
@@ -40,11 +48,13 @@ class PRF extends Module {
     val rs2Ready = WireDefault(false.B)
 
     // === 是否刚刚分配 ===
-    val rs1JustAllocated = io.in.alloc.zipWithIndex.take(i + 1)
+    val rs1JustAllocated = io.in.alloc.zipWithIndex
+      .take(i + 1)
       .map { case (a, j) => a.valid && (a.bits === rs1Idx) && rs1Idx =/= 0.U }
       .reduce(_ || _)
 
-    val rs2JustAllocated = io.in.alloc.zipWithIndex.take(i + 1)
+    val rs2JustAllocated = io.in.alloc.zipWithIndex
+      .take(i + 1)
       .map { case (a, j) => a.valid && (a.bits === rs2Idx) && rs2Idx =/= 0.U }
       .reduce(_ || _)
 
@@ -59,7 +69,9 @@ class PRF extends Module {
 
       for (j <- 0 until NUM_BYPASS_PORTS) {
         val bp = io.in.write(j)
-        when(bp.valid && !rs1Ready && bp.reg.phyDest === rs1Idx && rs1Idx =/= 0.U) {
+        when(
+          bp.valid && !rs1Ready && bp.reg.phyDest === rs1Idx && rs1Idx =/= 0.U
+        ) {
           rs1Value := bp.data
           rs1Ready := true.B
         }
@@ -77,17 +89,19 @@ class PRF extends Module {
 
       for (j <- 0 until NUM_BYPASS_PORTS) {
         val bp = io.in.write(j)
-        when(bp.valid && !rs2Ready && bp.reg.phyDest === rs2Idx && rs2Idx =/= 0.U) {
+        when(
+          bp.valid && !rs2Ready && bp.reg.phyDest === rs2Idx && rs2Idx =/= 0.U
+        ) {
           rs2Value := bp.data
           rs2Ready := true.B
         }
       }
     }
 
-    io.out.readRS1Data(i)  := Mux(rs1Ready, rs1Value, 0.U)
+    io.out.readRS1Data(i) := Mux(rs1Ready, rs1Value, 0.U)
     io.out.readRS1Ready(i) := rs1Ready
 
-    io.out.readRS2Data(i)  := Mux(rs2Ready, rs2Value, 0.U)
+    io.out.readRS2Data(i) := Mux(rs2Ready, rs2Value, 0.U)
     io.out.readRS2Ready(i) := rs2Ready
   }
 }

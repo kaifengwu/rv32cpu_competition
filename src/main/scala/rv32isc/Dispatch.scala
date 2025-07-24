@@ -111,7 +111,7 @@ class Dispatch extends Module {
       rob.isBranch := io.in.renameVec(i).ctrl.brCtrl.isBranch
       rob.isLoad := io.in.renameVec(i).ctrl.memCtrl.memRead
       rob.isStore := io.in.renameVec(i).ctrl.memCtrl.memWrite
-      rob.lrd := io.in.renameVec(i).oldPhyRd
+      rob.lrd := io.in.renameVec(i).logicRegs.rd
       rob.pc := io.in.renameVec(i).pc
       rob.robIdx := io.in.renameVec(i).robIdx
       rob
