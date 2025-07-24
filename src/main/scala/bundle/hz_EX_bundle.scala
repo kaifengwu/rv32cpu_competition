@@ -30,6 +30,8 @@ class BU_OUT extends Bundle {
   val jal_pc4    = UInt(ADDR_WIDTH.W)
   val robIdx     = UInt(ROB_IDX_WIDTH.W) //ROB索引，传递给ROB，本阶段只是传递信号不做任何处理
   val isReturnOut   = Bool() // 是否是返回指令
+  val isJal = Bool() // 是否是jal指令
+  val isJalr = Bool() // 是否是jalr指令
 
   // 添加写回物理寄存器相关信息
   val phyRd = UInt(PHYS_REG_IDX_WIDTH.W)  // 目标物理寄存器编号（对于jal/jalr指令）
@@ -111,9 +113,8 @@ class MOV_OUT extends Bundle {
 // 为MovUnit添加的解耦设计接口
 class MovIO_Decoupled extends Bundle {
   val issue = Flipped(Decoupled(new LsuIssueEntry))   // 使用LsuIssueEntry作为输入
-  val storeEntry = Input(new StoreEntry)              // 输入StoreEntry
-  val resultOut = ValidIO(new BypassBus)              // MovUnit运算结果
-  val writebackBus = Output(new WritebackBus)         // 添加专门的写回旁路总线
+  val resultOut = Output(new BypassBus)              // MovUnit运算结果
+  val writebackBus = Output(new BypassBus)         // 添加专门的写回旁路总线
   val busy = Output(Bool())                           // 忙信号
   val mov_out = ValidIO(new MOV_OUT)                  // 添加MOV_OUT输出接口供写回寄存器使用
 }

@@ -94,6 +94,8 @@ class BU extends Module {
   io.out.bits.busy := busy
   io.out.bits.pc := pc // 统一使用原始指令PC
   io.out.bits.jal_pc4 := jal_pc4
+  io.out.bits.isJal := isJal
+  io.out.bits.isJalr := isJalr
   io.out.bits.robIdx := robIdx
   io.out.bits.isReturnOut := isReturn
   io.out.bits.phyRd := phyRd
@@ -126,7 +128,7 @@ class BU_Top extends Module {
 
     // 旁路和写回总线
     val bypassBus = Output(new BypassBus)        // 组合逻辑阶段产生的旁路信号
-    val writebackBus = Output(new WritebackBus)  // 经过BU_WB_Reg后产生的写回信号
+    val writebackBus = Output(new BypassBus)  // 经过BU_WB_Reg后产生的写回信号
     val jumpBus = Output(ValidIO(new BU_OUT))    // 带valid的jump指令输出
 
     // 控制信号

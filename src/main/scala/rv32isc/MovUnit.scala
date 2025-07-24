@@ -20,9 +20,9 @@ class MovUnit extends Module {
 
   // 默认输出初始化
   io.resultOut.valid := resultValid
-  io.resultOut.bits.reg.phyDest := resultPhyDest
-  io.resultOut.bits.data := resultData
-  io.resultOut.bits.reg.robIdx := resultRobIdx
+  io.resultOut.reg.phyDest := resultPhyDest
+  io.resultOut.data := resultData
+  io.resultOut.reg.robIdx := resultRobIdx
 
   // 写回旁路总线
   io.writebackBus.valid := resultValid

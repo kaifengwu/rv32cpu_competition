@@ -8,9 +8,7 @@ import config.InstructionConstants._
 
 class RollbackSignal extends Bundle{
   val rollbackIdx = UInt(ROB_IDX_WIDTH.W)
-  val robTail = UInt(ROB_IDX_WIDTH.W)
   val robPc = UInt(ADDR_WIDTH.W)
-  val redirectPc = UInt(ADDR_WIDTH.W)
 }
 
 class ControlBundleIO extends Bundle{
@@ -38,7 +36,7 @@ class ControlBundleIO extends Bundle{
      val robFull = Input(Bool())
      //flush用
      val rollBack = Input(ValidIO(new RollbackSignal))
-     val predictedRet = Input(ValidIO(UInt(ADDR_WIDTH.W)))                   // RAS预测出的 ret 跳转目标（ValidIO）
+     val predictedRet = Input(ValidIO(UInt(ADDR_WIDTH.W)))// RAS预测出的 ret 跳转目标（ValidIO）
      val tailRob = Input(UInt(ROB_IDX_WIDTH.W)) //ROB的栈顶
   }
   val out = new Bundle {

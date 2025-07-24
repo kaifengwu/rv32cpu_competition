@@ -76,12 +76,10 @@ class ALU_Top extends Module {
 
     // 旁路和写回总线
     val bypassBus = Output(new BypassBus)
-    val writebackBus = Output(new WritebackBus)
-
+    val writebackBus = Output(new BypassBus)
     // 控制信号
     val stall = Input(Bool())
     val flush = Input(Bool())
-
     // 回滚信号
     val rollback = Input(Valid(new RsRollbackEntry))
   })
