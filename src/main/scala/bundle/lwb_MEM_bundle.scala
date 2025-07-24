@@ -63,9 +63,8 @@ class LSUWithStoreQueueIO extends Bundle {
   val bypassIn = Input(Vec(NUM_BYPASS_PORTS, new BypassBus))   // 接收前馈数据
   val bypassOut = Output(new BypassBus)                        // 输出地址计算结果
 
-  // 结果输出接口
-  val resultOut = ValidIO(new BypassBus)                     // 最终结果输出（普通指令）改为ValidIO
-  val pseudoOut = ValidIO(new BypassBus)                     // 伪指令结果输出（伪mov指令）改为ValidIO
+  // 结果输出接口 (统一为一个)
+  val resultOut = ValidIO(new BypassBus)                     // 最终结果输出（Load或伪指令）
 
   // 写回旁路接口
   val writebackBus = Output(new WritebackBus)                // 添加专门的写回旁路总线
@@ -81,6 +80,12 @@ class LSUWithStoreQueueIO extends Bundle {
   // 回滚信号
   val rollback = Input(Valid(UInt(ROB_IDX_WIDTH.W)))
   val tail = Input(UInt(ROB_IDX_WIDTH.W))
+
+  // StoreQueue 提交信号
+  val commit = Input(Bool())
+  // 新增: StoreQueue 头部信息输出，用于LSU_Top顶层匹配逻辑
+  val sq_head_valid = Output(Bool())
+  val sq_head_robIdx = Output(UInt(ROB_IDX_WIDTH.W))
 
   val busy = Output(Bool())                                    // LSU忙信号
 }

@@ -88,6 +88,12 @@ class LSU extends Module {
   val globalStoreQueue = Module(new StoreQueue)
   val memWithStoreQueue = Module(new MemWithStoreQueue)
 
+  // 将ROB提交信号连接到StoreQueue
+  globalStoreQueue.io.in.commit := io.commit
+  // 新增: 连接 StoreQueue 头部信息到 LSU 输出
+  io.sq_head_valid := globalStoreQueue.io.out.commitValid
+  io.sq_head_robIdx := globalStoreQueue.io.out.commitEntry.robIdx
+
   // 连接外设接口到顶层（保持不变）
   io.perip_addr := memWithStoreQueue.io.perip_addr
   io.perip_ren := memWithStoreQueue.io.perip_ren
@@ -99,11 +105,8 @@ class LSU extends Module {
   //-------------------------------------
   // 地址计算阶段
   //-------------------------------------
-  // 旁路选择逻辑（保持原功能）
-  val rs1Bypass = Mux1H(io.bypassIn.map(bp => bp.valid && bp.reg.phyDest === io.issue.bits.phyAddrBaseDest), 
-                        io.bypassIn.map(_.data))
-  
-  addrUnit.io.in.rs1_data := Mux(io.issue.valid, rs1Bypass, 0.U)
+
+  addrUnit.io.in.rs1_data := io.issue.bits.AddrBaseData
   addrUnit.io.in.imm := io.issue.bits.imm
   addrUnit.io.in.funct3 := io.issue.bits.func3
   addrUnit.io.in.isLoad := io.issue.bits.isLoad
@@ -115,42 +118,42 @@ class LSU extends Module {
   io.bypassOut.reg.robIdx := io.issue.bits.robIdx
   io.bypassOut.data := addrUnit.io.out.addr
 
-  // 伪指令处理（单周期完成）
-  io.pseudoOut.valid := io.issue.valid && io.issue.bits.isMov
-  io.pseudoOut.bits.reg.phyDest := io.issue.bits.phyRd
-  io.pseudoOut.bits.reg.robIdx := io.issue.bits.robIdx
-  io.pseudoOut.bits.data := MuxLookup(io.issue.bits.func3, rs1Bypass, Seq(
-    F3_LB  -> Cat(Fill(24, rs1Bypass(7)), rs1Bypass(7, 0)),
-    F3_LBU -> Cat(0.U(24.W), rs1Bypass(7, 0)),
-    F3_LH  -> Cat(Fill(16, rs1Bypass(15)), rs1Bypass(15, 0)),
-    F3_LHU -> Cat(0.U(16.W), rs1Bypass(15, 0))
-  ))
 
   //-------------------------------------
   // 流水寄存器更新逻辑
   //-------------------------------------
-  io.issue.ready := !reg_valid || !stall  // 反压控制
+  io.issue.ready := !reg_valid || !stall
 
   when (flush) {
+    reg_data := 0.U.asTypeOf(new LSUPipelineReg)
     reg_valid := false.B
   }.elsewhen (!stall) {
-    reg_valid := io.issue.valid && !io.issue.bits.isMov  // 伪指令不进入流水线
-    reg_data.entry := io.issue.bits
-    reg_data.addrResult := addrUnit.io.out.addr
-    reg_data.accessMask := addrUnit.io.out.accessMask
-    reg_data.canAccess := addrUnit.io.out.canAccess
-    
-    // 存储数据旁路选择
-    when(io.issue.bits.isStore) {
-      reg_data.storeData := Mux1H(io.bypassIn.map(bp => 
-        bp.valid && bp.reg.phyDest === io.issue.bits.phyStoreDataDest
-      ), io.bypassIn.map(_.data))
+    reg_valid := io.issue.valid
+    when(io.issue.valid) {
+        reg_data.entry := io.issue.bits
+        reg_data.addrResult := addrUnit.io.out.addr
+        reg_data.accessMask := addrUnit.io.out.accessMask
+        reg_data.canAccess := addrUnit.io.out.canAccess
+        reg_data.storeData := io.issue.bits.StoreData
     }
   }
 
   //-------------------------------------
-  // 访存执行阶段
+  // 访存执行阶段(第二周期) 
   //-------------------------------------
+    // --- 伪指令处理逻辑 (第二周期) ---
+  val pseudoData = reg_data.storeData
+  val pseudoResult = WireDefault(pseudoData)
+  when(reg_data.entry.isMov) {
+    switch(reg_data.entry.func3) {
+      is(F3_LB)  { pseudoResult := Cat(Fill(24, pseudoData(7)), pseudoData(7, 0)) }
+      is(F3_LBU) { pseudoResult := Cat(0.U(24.W), pseudoData(7, 0)) }
+      is(F3_LH)  { pseudoResult := Cat(Fill(16, pseudoData(15)), pseudoData(15, 0)) }
+      is(F3_LHU) { pseudoResult := Cat(0.U(16.W), pseudoData(15, 0)) }
+      is(F3_LW)  { pseudoResult := pseudoData }
+    }
+  }
+  
   // StoreQueue接口
   globalStoreQueue.io.in.rollback := io.rollback
   globalStoreQueue.io.in.enq.valid := reg_valid && reg_data.entry.isStore
@@ -170,21 +173,23 @@ class LSU extends Module {
   memWithStoreQueue.io.mem.in.fromStoreQueue := false.B
   memWithStoreQueue.io.mem.in.robIdx := reg_data.entry.robIdx
 
-  // 结果输出逻辑
+// 结果输出逻辑 (统一在第二周期输出)
   val loadResult = Mux(globalStoreQueue.io.out.bypass.hit,
                       globalStoreQueue.io.out.bypass.data,
                       memWithStoreQueue.io.mem.out.rdata)
   
-  io.resultOut.valid := reg_valid && (reg_data.entry.isLoad || reg_data.entry.isStore)
-  io.resultOut.bits.reg.phyDest := Mux(reg_data.entry.isLoad, reg_data.entry.phyRd, 0.U)
-  io.resultOut.bits.data := Mux(reg_data.entry.isLoad, loadResult, 0.U)
+  val finalResult = Mux(reg_data.entry.isMov, pseudoResult, loadResult)
+
+  io.resultOut.valid := reg_valid && (reg_data.entry.isLoad || reg_data.entry.isStore || reg_data.entry.isMov)
+  io.resultOut.bits.reg.phyDest := Mux(reg_data.entry.isStore, 0.U, reg_data.entry.phyRd)
+  io.resultOut.bits.data := Mux(reg_data.entry.isStore, 0.U, finalResult)
   io.resultOut.bits.reg.robIdx := reg_data.entry.robIdx
 
-  // 写回旁路总线
-  io.writebackBus.valid := reg_valid && reg_data.entry.isLoad
+  // 写回旁路总线 (Load和伪指令都需要写回)
+  io.writebackBus.valid := reg_valid && (reg_data.entry.isLoad || reg_data.entry.isMov)
   io.writebackBus.reg.phyDest := reg_data.entry.phyRd
   io.writebackBus.reg.robIdx := reg_data.entry.robIdx
-  io.writebackBus.data := loadResult
+  io.writebackBus.data := finalResult
 
   // 忙状态信号
   io.busy := reg_valid
@@ -196,15 +201,13 @@ class LSU_Top extends Module {
     val issue = Flipped(Decoupled(new LsuIssueEntry))
 
     // 旁路总线接口
-    val bypassIn = Input(Vec(NUM_BYPASS_PORTS, new BypassBus))   // 接收前馈数据
-    val bypassOut = Output(new BypassBus)                        // 输出地址计算结果
+    val bypassOut = Output(new BypassBus)
 
     // 结果输出接口
-    val resultOut = ValidIO(new BypassBus)                     // 最终结果输出
-    val pseudoOut = ValidIO(new BypassBus)                     // 伪指令结果输出
+    val resultOut = ValidIO(new BypassBus)
 
     // 写回旁路接口
-    val writebackBus = Output(new WritebackBus)                // 添加专门的写回旁路总线
+    val writebackBus = Output(new WritebackBus)
 
     // 外设直连接口
     val perip_addr = Output(UInt(32.W))
@@ -218,7 +221,10 @@ class LSU_Top extends Module {
     val rollback = Input(Valid(UInt(ROB_IDX_WIDTH.W)))
     val tail = Input(UInt(ROB_IDX_WIDTH.W))
 
-    val busy = Output(Bool())                                  // LSU忙信号
+    // 新增: 来自ROB的Store提交请求
+    val commit_store = Input(ValidIO(new RobCommitStoreEntry))
+
+    val busy = Output(Bool())
   })
 
   // 实例化RS_lsu_Reg，负责从保留站接收指令
@@ -230,23 +236,28 @@ class LSU_Top extends Module {
   // 实例化lsu_Next_Reg，负责将执行结果输出
   val lsu_next_reg = Module(new LSU_Next_Reg)
 
+  // --- 新增的提交匹配逻辑 ---
+  // 检查ROB发出的store提交请求
+  val do_commit = io.commit_store.valid && lsu_core.io.sq_head_valid && (io.commit_store.bits.robIdx === lsu_core.io.sq_head_robIdx)
+
+  // 当ROB的提交请求有效，且LSU的StoreQueue头部也有效，并且两者的robIdx匹配时，向LSU核心发送commit信号
+  lsu_core.io.commit := do_commit
+  // --- 逻辑添加完毕 ---
+
   // 回滚相关信号处理
   val rollbackEntry = Wire(new RsRollbackEntry)
   rollbackEntry.rollbackIdx := io.rollback.bits
   rollbackEntry.tailIdx := io.tail
 
   // ========= RS_lsu_Reg连接 =========
-  // 输入连接
   rs_lsu_reg.io.in <> io.issue
-  rs_lsu_reg.io.stall := false.B  // 这里可以根据实际需求调整
-  rs_lsu_reg.io.flush := false.B  // 这里可以根据实际需求调整
+  rs_lsu_reg.io.stall := false.B
+  rs_lsu_reg.io.flush := false.B
   rs_lsu_reg.io.rollback.valid := io.rollback.valid
   rs_lsu_reg.io.rollback.bits := rollbackEntry
 
   // ========= LSU核心单元连接 =========
-  // LSU输入连接
   lsu_core.io.issue <> rs_lsu_reg.io.out
-  lsu_core.io.bypassIn := io.bypassIn
   lsu_core.io.rollback := io.rollback
   lsu_core.io.tail := io.tail
 
@@ -271,7 +282,7 @@ class LSU_Top extends Module {
   io.bypassOut := lsu_core.io.bypassOut
 
   // 伪指令结果直接输出，不经过lsu_Next_Reg
-  io.pseudoOut := lsu_core.io.pseudoOut
+  // io.pseudoOut := lsu_core.io.pseudoOut
 
   // 经过第二周期后输出的写回结果
   io.resultOut := lsu_next_reg.io.out
